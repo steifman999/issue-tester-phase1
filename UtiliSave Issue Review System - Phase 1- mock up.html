@@ -1,0 +1,1072 @@
+<!DOCTYPE html>
+<!-- saved from url=(0110)file:///C:/Users/Michael%20Steifman/Claude/Projects/Issue%20Submission%20and%20Appeal%20Review/phase1_app.html -->
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UtiliSave Issue Review System - Phase 1</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #1f4e78 0%, #2e5c8a 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .main {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            padding: 40px;
+        }
+
+        @media (max-width: 1024px) {
+            .main {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .section {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .section h2 {
+            font-size: 18px;
+            color: #1f4e78;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .tooltip {
+            width: 18px;
+            height: 18px;
+            background: #2e5c8a;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: help;
+            position: relative;
+        }
+
+        .tooltip:hover::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 125%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #333;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: normal;
+            white-space: max-content;
+            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            color: #333;
+            margin-bottom: 8px;
+        }
+
+        .label-with-tooltip {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        input[type="text"],
+        input[type="date"],
+        input[type="number"],
+        select,
+        textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: inherit;
+            transition: border-color 0.3s, box-shadow 0.3s;
+        }
+
+        input[type="text"]:focus,
+        input[type="date"]:focus,
+        input[type="number"]:focus,
+        select:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #2e5c8a;
+            box-shadow: 0 0 0 3px rgba(46, 92, 138, 0.1);
+        }
+
+        textarea {
+            min-height: 120px;
+            resize: vertical;
+        }
+
+        .button-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-top: 30px;
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #1f4e78 0%, #2e5c8a 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(31, 78, 120, 0.3);
+        }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        .upload-area {
+            border: 2px dashed #2e5c8a;
+            border-radius: 8px;
+            padding: 30px;
+            text-align: center;
+            background: rgba(46, 92, 138, 0.02);
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .upload-area:hover {
+            border-color: #1f4e78;
+            background: rgba(46, 92, 138, 0.05);
+        }
+
+        .upload-area.active {
+            border-color: #1f4e78;
+            background: rgba(46, 92, 138, 0.08);
+        }
+
+        .upload-area p {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+
+        .upload-area .small {
+            font-size: 12px;
+            color: #999;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        .file-info {
+            margin-top: 12px;
+            padding: 12px;
+            background: #e8f4f8;
+            border-radius: 6px;
+            font-size: 13px;
+            color: #0c5460;
+        }
+
+        .results-container {
+            grid-column: 1 / -1;
+            margin-top: 20px;
+            padding-top: 30px;
+            border-top: 2px solid #eee;
+        }
+
+        .score-display {
+            background: linear-gradient(135deg, #e8f4f8 0%, #d4e9f2 100%);
+            padding: 30px;
+            border-radius: 12px;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .score-number {
+            font-size: 64px;
+            font-weight: bold;
+            color: #1f4e78;
+            margin-bottom: 8px;
+        }
+
+        .score-label {
+            font-size: 16px;
+            color: #333;
+            margin-bottom: 12px;
+        }
+
+        .score-interpretation {
+            font-size: 14px;
+            color: #666;
+            padding: 12px;
+            background: white;
+            border-radius: 6px;
+            margin-top: 12px;
+        }
+
+        .score-potential {
+            font-size: 13px;
+            color: #2e5c8a;
+            font-weight: 600;
+            margin-top: 12px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 0;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #eee;
+        }
+
+        .tab-button {
+            padding: 12px 20px;
+            border: none;
+            background: none;
+            color: #999;
+            font-weight: 600;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .tab-button.active {
+            color: #1f4e78;
+            border-bottom-color: #1f4e78;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .breakdown-item {
+            padding: 16px;
+            margin-bottom: 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: #fafafa;
+        }
+
+        .breakdown-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .breakdown-title {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .breakdown-score {
+            font-size: 16px;
+            font-weight: bold;
+            color: #1f4e78;
+        }
+
+        .breakdown-description {
+            font-size: 13px;
+            color: #666;
+            line-height: 1.5;
+        }
+
+        .suggestion-item {
+            padding: 16px;
+            margin-bottom: 16px;
+            border-left: 4px solid #2e5c8a;
+            background: #f8f9fa;
+            border-radius: 6px;
+        }
+
+        .suggestion-priority {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .priority-critical {
+            background: #ffcccc;
+            color: #cc0000;
+        }
+
+        .priority-major {
+            background: #ffe6cc;
+            color: #ff8800;
+        }
+
+        .priority-improvement {
+            background: #ffffcc;
+            color: #997700;
+        }
+
+        .priority-optional {
+            background: #ccddff;
+            color: #0055cc;
+        }
+
+        .suggestion-title {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+        }
+
+        .suggestion-content {
+            font-size: 13px;
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 12px;
+        }
+
+        .suggestion-impact {
+            padding: 12px;
+            background: white;
+            border-radius: 4px;
+            font-size: 13px;
+            color: #1f4e78;
+            font-weight: 600;
+        }
+
+        .checklist-item {
+            padding: 12px;
+            margin-bottom: 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+        }
+
+        .checklist-item input[type="checkbox"] {
+            margin-top: 4px;
+            cursor: pointer;
+        }
+
+        .checklist-content {
+            flex: 1;
+        }
+
+        .checklist-title {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 4px;
+        }
+
+        .checklist-reason {
+            font-size: 12px;
+            color: #666;
+            line-height: 1.5;
+        }
+
+        .checklist-status {
+            font-size: 12px;
+            font-weight: 600;
+            color: #0c5460;
+            margin-top: 8px;
+            padding: 8px;
+            background: #d1ecf1;
+            border-radius: 4px;
+        }
+
+        .checklist-status.missing {
+            color: #721c24;
+            background: #f8d7da;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+
+        .empty-state p {
+            font-size: 16px;
+            margin-bottom: 8px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #2e5c8a;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .required {
+            color: #cc0000;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>UtiliSave Issue Review System</h1>
+            <p>Phase 1 - Core Review Module | Simple • Elegant • Helpful</p>
+        </div>
+
+        <div class="main">
+            <!-- Left Column: Input -->
+            <div class="section">
+                <h2>
+                    <span>Submission Information</span>
+                    <span class="tooltip" data-tooltip="Enter auditor details, customer info, and submission metadata">?</span>
+                </h2>
+
+                <form id="submissionForm">
+                    <div class="form-group">
+                        <label>
+                            <span class="label-with-tooltip">
+                                Auditor Name <span class="required">*</span>
+                                <span class="tooltip" data-tooltip="Your name or ID for tracking purposes">?</span>
+                            </span>
+                        </label>
+                        <input type="text" id="auditorName" placeholder="e.g., Matthew Sands" required="">
+                    </div>
+
+                    <div class="form-group">
+                        <label>
+                            <span class="label-with-tooltip">
+                                Customer Name <span class="required">*</span>
+                                <span class="tooltip" data-tooltip="Legal name of the utility customer">?</span>
+                            </span>
+                        </label>
+                        <input type="text" id="customerName" placeholder="e.g., Crotonville Owner LLC" required="">
+                    </div>
+
+                    <div class="form-group">
+                        <label>
+                            <span class="label-with-tooltip">
+                                Account Number <span class="required">*</span>
+                                <span class="tooltip" data-tooltip="Utility account number being disputed">?</span>
+                            </span>
+                        </label>
+                        <input type="text" id="accountNumber" placeholder="e.g., 01380112092" required="">
+                    </div>
+
+                    <div class="form-group">
+                        <label>
+                            <span class="label-with-tooltip">
+                                Utility <span class="required">*</span>
+                                <span class="tooltip" data-tooltip="Which utility company is this issue about?">?</span>
+                            </span>
+                        </label>
+                        <select id="utilityName" required="">
+                            <option value="">Select utility...</option>
+                            <option value="ConEd">Consolidated Edison (ConEd)</option>
+                            <option value="SUEZ">SUEZ Water</option>
+                            <option value="Verizon">Verizon</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>
+                            <span class="label-with-tooltip">
+                                Utility Type <span class="required">*</span>
+                                <span class="tooltip" data-tooltip="What service is being disputed?">?</span>
+                            </span>
+                        </label>
+                        <select id="utilityType" required="">
+                            <option value="">Select type...</option>
+                            <option value="Electric">Electric</option>
+                            <option value="Gas">Gas</option>
+                            <option value="Water">Water</option>
+                            <option value="Sewer">Sewer</option>
+                            <option value="Steam">Steam</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>
+                            <span class="label-with-tooltip">
+                                Issue Type <span class="required">*</span>
+                                <span class="tooltip" data-tooltip="What is the nature of this complaint?">?</span>
+                            </span>
+                        </label>
+                        <select id="issueType" required="">
+                            <option value="">Select issue type...</option>
+                            <option value="Rate Classification">Rate Classification Error</option>
+                            <option value="Billing Error">Billing Error</option>
+                            <option value="Service Charge">Improper Service Charge</option>
+                            <option value="Interest Dispute">Interest/Penalty Dispute</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>
+                            <span class="label-with-tooltip">
+                                Expected Financial Impact <span class="required">*</span>
+                                <span class="tooltip" data-tooltip="Estimated dollar value of refund or ongoing savings">?</span>
+                            </span>
+                        </label>
+                        <input type="number" id="financialImpact" placeholder="$0" min="0" required="">
+                    </div>
+
+                    <div class="form-group">
+                        <label>
+                            <span class="label-with-tooltip">
+                                Case ID
+                                <span class="tooltip" data-tooltip="If already assigned by utility, enter it here">?</span>
+                            </span>
+                        </label>
+                        <input type="text" id="caseId" placeholder="e.g., USLLC0525-25">
+                    </div>
+
+                    <div class="form-group">
+                        <label>
+                            <span class="label-with-tooltip">
+                                Submission Date
+                                <span class="tooltip" data-tooltip="When is this being submitted?">?</span>
+                            </span>
+                        </label>
+                        <input type="date" id="submissionDate" required="">
+                    </div>
+                </form>
+            </div>
+
+            <!-- Right Column: Upload -->
+            <div class="section">
+                <h2>
+                    <span>Upload Submission</span>
+                    <span class="tooltip" data-tooltip="Upload your letter or Excel form for review">?</span>
+                </h2>
+
+                <div class="upload-area" id="uploadArea">
+                    <p><strong>Click to upload or drag here</strong></p>
+                    <p class="small">Supported: .xlsx (ConEd form), .docx, .pdf, or paste text</p>
+                    <input type="file" id="fileInput" accept=".xlsx,.docx,.pdf,.txt">
+                </div>
+
+                <div id="fileInfo" style="display: none;">
+                    <div class="file-info">
+                        <strong id="fileName"></strong><br>
+                        <small id="fileSize"></small>
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-top: 20px;">
+                    <label>
+                        <span class="label-with-tooltip">
+                            Or paste text directly
+                            <span class="tooltip" data-tooltip="Paste letter content or paste from Excel narrative">?</span>
+                        </span>
+                    </label>
+                    <textarea id="submissionText" placeholder="Paste your issue description or letter content here..."></textarea>
+                </div>
+
+                <div class="button-group">
+                    <button type="button" class="btn-primary" id="reviewBtn" onclick="submitForReview()">Review Submission</button>
+                    <button type="button" class="btn-secondary" onclick="resetForm()">Clear</button>
+                </div>
+            </div>
+
+            <!-- Results Section -->
+            <div class="results-container" id="resultsContainer" style="display: none;">
+                <div class="score-display" id="scoreDisplay">
+                    <div class="score-number" id="scoreNumber">--</div>
+                    <div class="score-label">Likelihood of Success</div>
+                    <div class="score-interpretation" id="scoreInterpretation"></div>
+                    <div class="score-potential" id="scorePotential"></div>
+                </div>
+
+                <div class="tabs">
+                    <button class="tab-button active" onclick="switchTab(event, &#39;breakdown&#39;)">Score Breakdown</button>
+                    <button class="tab-button" onclick="switchTab(event, &#39;issues&#39;)">Issues &amp; Gaps</button>
+                    <button class="tab-button" onclick="switchTab(event, &#39;suggestions&#39;)">Suggestions</button>
+                    <button class="tab-button" onclick="switchTab(event, &#39;checklist&#39;)">Pre-Submission Checklist</button>
+                </div>
+
+                <!-- Breakdown Tab -->
+                <div id="breakdown" class="tab-content active">
+                    <div id="breakdownContent"></div>
+                </div>
+
+                <!-- Issues Tab -->
+                <div id="issues" class="tab-content">
+                    <div id="issuesContent"></div>
+                </div>
+
+                <!-- Suggestions Tab -->
+                <div id="suggestions" class="tab-content">
+                    <div id="suggestionsContent"></div>
+                </div>
+
+                <!-- Checklist Tab -->
+                <div id="checklist" class="tab-content">
+                    <div id="checklistContent"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Set today's date
+        document.getElementById('submissionDate').valueAsDate = new Date();
+
+        // Upload area drag and drop
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+
+        uploadArea.addEventListener('click', () => fileInput.click());
+
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('active');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('active');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('active');
+            fileInput.files = e.dataTransfer.files;
+            showFileInfo();
+        });
+
+        fileInput.addEventListener('change', showFileInfo);
+
+        function showFileInfo() {
+            const file = fileInput.files[0];
+            if (file) {
+                document.getElementById('fileName').textContent = file.name;
+                document.getElementById('fileSize').textContent = `Size: ${(file.size / 1024).toFixed(1)} KB`;
+                document.getElementById('fileInfo').style.display = 'block';
+            }
+        }
+
+        function switchTab(e, tabName) {
+            e.preventDefault();
+
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+
+            // Show selected tab
+            document.getElementById(tabName).classList.add('active');
+            e.target.classList.add('active');
+        }
+
+        function submitForReview() {
+            // Validate form
+            const auditorName = document.getElementById('auditorName').value;
+            const customerName = document.getElementById('customerName').value;
+            const accountNumber = document.getElementById('accountNumber').value;
+            const utilityName = document.getElementById('utilityName').value;
+            const utilityType = document.getElementById('utilityType').value;
+            const issueType = document.getElementById('issueType').value;
+            const financialImpact = document.getElementById('financialImpact').value;
+            const submissionText = document.getElementById('submissionText').value;
+
+            if (!auditorName || !customerName || !accountNumber || !utilityName || !utilityType || !issueType || !financialImpact) {
+                alert('Please fill in all required fields.');
+                return;
+            }
+
+            if (!submissionText && !fileInput.files[0]) {
+                alert('Please upload a document or paste text.');
+                return;
+            }
+
+            // Show loading state
+            document.getElementById('resultsContainer').style.display = 'grid';
+            document.getElementById('scoreDisplay').innerHTML = '<div class="spinner"></div><p>Analyzing submission...</p>';
+
+            // Simulate review process (in real app, this would call backend)
+            setTimeout(() => {
+                generateReview(auditorName, customerName, accountNumber, utilityName, utilityType, issueType, financialImpact, submissionText);
+            }, 1500);
+        }
+
+        function generateReview(auditorName, customerName, accountNumber, utilityName, utilityType, issueType, financialImpact, submissionText) {
+            // Simulate scoring logic based on content
+            let baseScore = 50;
+            let score = baseScore;
+            let breakdown = [];
+            let issues = [];
+            let suggestions = [];
+
+            // Check for regulatory citations
+            const hasTariff = /tariff|rate schedule|SC9|SC /i.test(submissionText);
+            const hasPSC = /psc|public service|16 NYCRR|case|determination/i.test(submissionText);
+            const hasFinancial = /\$|amount|calculation|refund|billing|period/i.test(submissionText);
+            const hasLogic = /therefore|as a result|because|argues|demonstrates|shows/i.test(submissionText);
+            const hasDetail = submissionText.length > 200 && submissionText.split('\n').length > 3;
+
+            // Regulatory citation
+            if (hasTariff) {
+                baseScore += 12;
+                breakdown.push({
+                    title: 'Regulatory Citations',
+                    score: '12/15',
+                    status: '✓ Good',
+                    description: 'Tariff section cited. Consider adding specific PSC regulation reference (16 NYCRR).'
+                });
+            } else {
+                baseScore -= 8;
+                breakdown.push({
+                    title: 'Regulatory Citations',
+                    score: '0/15',
+                    status: '✗ Missing',
+                    description: 'No tariff or regulation cited. This is critical—add specific regulatory basis.'
+                });
+                issues.push({
+                    type: 'CRITICAL',
+                    title: 'No Regulatory Citation',
+                    description: 'Submission lacks citations to tariff section or applicable regulation.',
+                    impact: 'High - Utility will not take seriously without legal basis'
+                });
+                suggestions.push({
+                    priority: 'critical',
+                    title: 'Add Tariff Section Citation',
+                    description: 'Identify and cite the specific tariff section that applies to this issue.',
+                    example: `"As required by [Utility Name] Tariff Section [X.X], the account should be classified as [Rate Class]."`,
+                    impact: '+12 points (50 → 62)',
+                    confidence: 'High'
+                });
+            }
+
+            // Precedent
+            if (hasPSC) {
+                baseScore += 18;
+                breakdown.push({
+                    title: 'Precedent Support',
+                    score: '18/25',
+                    status: '✓ Good',
+                    description: 'PSC case or regulation referenced. Consider adding similar rate determination case.'
+                });
+            } else {
+                baseScore -= 10;
+                breakdown.push({
+                    title: 'Precedent Support',
+                    score: '0/25',
+                    status: '✗ Missing',
+                    description: 'No prior PSC cases cited. This weakens your argument significantly.'
+                });
+                issues.push({
+                    type: 'MAJOR',
+                    title: 'No PSC Precedent',
+                    description: 'Missing citation to prior PSC case with similar issue.',
+                    impact: 'Medium - Without precedent, utility has no obligation to follow your logic'
+                });
+                suggestions.push({
+                    priority: 'major',
+                    title: 'Add PSC Case Citation',
+                    description: 'Search PSC database for similar rate classification or billing error cases.',
+                    example: `"As established in PSC Case [Number], retroactive rate corrections are appropriate when..."`,
+                    impact: '+15-20 points (depends on case relevance)',
+                    confidence: 'High'
+                });
+            }
+
+            // Financial documentation
+            if (hasFinancial) {
+                baseScore += 7;
+                breakdown.push({
+                    title: 'Financial Documentation',
+                    score: '7/10',
+                    status: '✓ Good',
+                    description: 'Dollar amount and billing periods mentioned. Ensure calculation is explicit.'
+                });
+            } else {
+                baseScore -= 8;
+                breakdown.push({
+                    title: 'Financial Documentation',
+                    score: '0/10',
+                    status: '✗ Missing',
+                    description: 'No clear financial impact calculation shown.'
+                });
+                issues.push({
+                    type: 'CRITICAL',
+                    title: 'Unclear Financial Impact',
+                    description: 'Submission does not clearly state or calculate the dollar amount.',
+                    impact: 'High - Utility needs to know what they\'re being asked to refund'
+                });
+            }
+
+            // Logical argument
+            if (hasLogic) {
+                baseScore += 10;
+                breakdown.push({
+                    title: 'Logical Argument',
+                    score: '10/15',
+                    status: '✓ Partial',
+                    description: 'Logical flow is present. Consider anticipating counterarguments.'
+                });
+            } else {
+                baseScore -= 5;
+                breakdown.push({
+                    title: 'Logical Argument',
+                    score: '5/15',
+                    status: '⚠ Weak',
+                    description: 'Argument structure could be clearer. Add cause-and-effect statements.'
+                });
+            }
+
+            // Detail and specificity
+            if (hasDetail) {
+                baseScore += 8;
+                breakdown.push({
+                    title: 'Detail & Specificity',
+                    score: '8/10',
+                    status: '✓ Good',
+                    description: 'Sufficient detail provided. Add account setup dates and payment timeline if relevant.'
+                });
+            } else {
+                baseScore -= 5;
+                breakdown.push({
+                    title: 'Detail & Specificity',
+                    score: '5/10',
+                    status: '⚠ Needs Work',
+                    description: 'More detail needed. Include dates, account history, timeline.'
+                });
+            }
+
+            // Cap score at 100, floor at 1
+            score = Math.max(1, Math.min(100, baseScore));
+
+            // Get interpretation
+            let interpretation = '';
+            let potentialScore = score + 25; // Potential if all suggestions accepted
+            potentialScore = Math.min(100, potentialScore);
+
+            if (score >= 85) {
+                interpretation = 'Strong case. Most key elements present. High conviction.';
+            } else if (score >= 70) {
+                interpretation = 'Solid case. Main elements present but some gaps. Good conviction.';
+            } else if (score >= 55) {
+                interpretation = 'Borderline case. Several gaps or weak sources. Proceed with caution.';
+            } else if (score >= 40) {
+                interpretation = 'Weak case. Major elements missing. Not recommended unless strategic value.';
+            } else {
+                interpretation = 'Very weak case. Multiple critical gaps. Should not submit without major revision.';
+            }
+
+            // Add general improvement suggestions
+            if (score < 80) {
+                suggestions.push({
+                    priority: 'improvement',
+                    title: 'Review for Logical Gaps',
+                    description: 'Add transitional sentences explaining cause-and-effect between problem and solution.',
+                    example: `"Because [problem], the account [error]. Therefore, [relief requested]."`,
+                    impact: '+8 points',
+                    confidence: 'Medium'
+                });
+            }
+
+            // Generate checklist
+            let checklistItems = [
+                {
+                    title: 'Cite specific tariff section',
+                    reason: 'Foundation of legal argument',
+                    status: hasTariff ? 'Found' : 'Missing'
+                },
+                {
+                    title: 'Cite prior PSC case',
+                    reason: 'Demonstrates precedent support',
+                    status: hasPSC ? 'Found' : 'Missing'
+                },
+                {
+                    title: 'State specific relief requested',
+                    reason: 'Utility must know exactly what you want',
+                    status: /refund|change|adjust|correction|relief/i.test(submissionText) ? 'Found' : 'Missing'
+                },
+                {
+                    title: 'Verify account eligibility',
+                    reason: 'Don\'t argue eligibility for something ineligible',
+                    status: /establish|eligible|qualified|classification/i.test(submissionText) ? 'Found' : 'Missing'
+                },
+                {
+                    title: 'Customer authorization on file',
+                    reason: 'Required before final submission',
+                    status: 'Required at submission'
+                }
+            ];
+
+            // Render results
+            renderResults(score, interpretation, potentialScore, breakdown, issues, suggestions, checklistItems);
+        }
+
+        function renderResults(score, interpretation, potentialScore, breakdown, issues, suggestions, checklistItems) {
+            // Score display
+            document.getElementById('scoreNumber').textContent = score;
+            document.getElementById('scoreInterpretation').textContent = interpretation;
+            document.getElementById('scorePotential').textContent = `Potential score with all suggestions: ${potentialScore}/100`;
+
+            // Breakdown
+            let breakdownHTML = '';
+            breakdown.forEach(item => {
+                breakdownHTML += `
+                    <div class="breakdown-item">
+                        <div class="breakdown-header">
+                            <div class="breakdown-title">${item.title}</div>
+                            <div class="breakdown-score">${item.score} ${item.status}</div>
+                        </div>
+                        <div class="breakdown-description">${item.description}</div>
+                    </div>
+                `;
+            });
+            document.getElementById('breakdownContent').innerHTML = breakdownHTML;
+
+            // Issues
+            let issuesHTML = '';
+            if (issues.length === 0) {
+                issuesHTML = '<div class="empty-state"><p>No critical issues identified.</p></div>';
+            } else {
+                issues.forEach(issue => {
+                    const typeColor = {
+                        'CRITICAL': '#ffcccc',
+                        'MAJOR': '#ffe6cc',
+                        'IMPROVEMENT': '#ffffcc'
+                    };
+                    issuesHTML += `
+                        <div class="suggestion-item" style="border-left-color: ${issue.type === 'CRITICAL' ? '#cc0000' : issue.type === 'MAJOR' ? '#ff8800' : '#ffcc00'}">
+                            <div class="suggestion-priority priority-${issue.type.toLowerCase()}">${issue.type}</div>
+                            <div class="suggestion-title">${issue.title}</div>
+                            <div class="suggestion-content">${issue.description}</div>
+                            <div class="suggestion-impact">Impact: ${issue.impact}</div>
+                        </div>
+                    `;
+                });
+            }
+            document.getElementById('issuesContent').innerHTML = issuesHTML;
+
+            // Suggestions
+            let suggestionsHTML = '';
+            if (suggestions.length === 0) {
+                suggestionsHTML = '<div class="empty-state"><p>No suggestions at this time.</p></div>';
+            } else {
+                suggestions.forEach((sug, idx) => {
+                    suggestionsHTML += `
+                        <div class="suggestion-item">
+                            <div class="suggestion-priority priority-${sug.priority}">${sug.priority.toUpperCase()}</div>
+                            <div class="suggestion-title">${idx + 1}. ${sug.title}</div>
+                            <div class="suggestion-content">${sug.description}</div>
+                            <div style="margin: 12px 0; padding: 12px; background: #f5f5f5; border-radius: 4px; border-left: 3px solid #ddd; font-size: 13px;">
+                                <strong>Example:</strong> <em>${sug.example}</em>
+                            </div>
+                            <div class="suggestion-impact">
+                                Point Impact: ${sug.impact} | Confidence: ${sug.confidence}
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+            document.getElementById('suggestionsContent').innerHTML = suggestionsHTML;
+
+            // Checklist
+            let checklistHTML = '';
+            checklistItems.forEach(item => {
+                const isMissing = item.status === 'Missing';
+                checklistHTML += `
+                    <div class="checklist-item">
+                        <input type="checkbox" ${!isMissing ? 'checked' : ''} disabled>
+                        <div class="checklist-content">
+                            <div class="checklist-title">${item.title}</div>
+                            <div class="checklist-reason">${item.reason}</div>
+                            <div class="checklist-status ${isMissing ? 'missing' : ''}">
+                                ${item.status}${isMissing ? ' — Add before submission' : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            document.getElementById('checklistContent').innerHTML = checklistHTML;
+        }
+
+        function resetForm() {
+            document.getElementById('submissionForm').reset();
+            document.getElementById('submissionText').value = '';
+            document.getElementById('fileInput').value = '';
+            document.getElementById('fileInfo').style.display = 'none';
+            document.getElementById('resultsContainer').style.display = 'none';
+            document.getElementById('submissionDate').valueAsDate = new Date();
+        }
+    </script>
+
+
+</body></html>
