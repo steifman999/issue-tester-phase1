@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- Sign-in gate. Administrators only. -->
+    <script src="auth.js" data-require="admin"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UtiliSave Skill Suggestions — Admin</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        min-height: 100vh;
+        padding: 20px;
+    }
+
+    .container {
+        max-width: 1400px;
+        margin: 0 auto;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.1);
+        overflow: hidden;
+    }
+
+    .header {
+        background: linear-gradient(135deg, #1f4e78 0%, #2e5c8a 100%);
+        color: white;
+        padding: 30px;
+        text-align: center;
+    }
+
+    .header-logo {
+        background: #fff;
+        display: inline-block;
+        padding: 10px 22px;
+        border-radius: 10px;
+        margin-bottom: 14px;
+        line-height: 0;
+    }
+
+    .header-logo svg { height: 42px; width: auto; display: block; }
+
+    .header h1 { font-size: 28px; margin-bottom: 8px; }
+    .header p { font-size: 14px; opacity: 0.9; }
+    .header p.confidential-notice {
+        font-size: 11px;
+        opacity: 0.75;
+        margin-top: 6px;
+        letter-spacing: 0.3px;
+        text-transform: uppercase;
+    }
+
+    .piles {
+        display: flex;
+        gap: 0;
+        border-bottom: 2px solid #eee;
+        padding: 0 30px;
+    }
+
+    .pile-button {
+        padding: 16px 22px;
+        border: none;
+        background: none;
+        color: #999;
+        font-weight: 600;
+        font-size: 14px;
+        cursor: pointer;
+        border-bottom: 3px solid transparent;
+        transition: all 0.2s;
+    }
+
+    .pile-button.active {
+        color: #1f4e78;
+        border-bottom-color: #1f4e78;
+    }
+
+    .pile-button .count {
+        display: inline-block;
+        margin-left: 6px;
+        padding: 1px 8px;
+        border-radius: 10px;
+        background: #eef2f6;
+        color: #666;
+        font-size: 12px;
+    }
+
+    .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 20px 30px;
+        border-bottom: 1px solid #eee;
+        flex-wrap: wrap;
+    }
+
+    .toolbar input[type="text"] {
+        flex: 1;
+        min-width: 220px;
+        padding: 10px 14px;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        font-size: 14px;
+    }
+
+    .toolbar button.refresh {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        background: linear-gradient(135deg, #1f4e78 0%, #2e5c8a 100%);
+        color: white;
+    }
+
+    .count-label { font-size: 13px; color: #666; white-space: nowrap; }
+
+    .cards { padding: 10px 30px 30px; display: flex; flex-direction: column; gap: 16px; }
+
+    .card {
+        border: 1px solid #eee;
+        border-radius: 10px;
+        padding: 18px 20px;
+    }
+
+    .card.accepted { border-left: 4px solid #1e7e42; }
+    .card.rejected { border-left: 4px solid #a11d1d; }
+    .card.pending { border-left: 4px solid #7a5c00; }
+
+    .card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 16px;
+        margin-bottom: 10px;
+        flex-wrap: wrap;
+    }
+
+    .card-title { font-size: 14px; font-weight: 700; color: #1f4e78; }
+    .card-meta { font-size: 12px; color: #888; margin-top: 2px; }
+
+    .badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-size: 11.5px;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    .badge-pending   { background: #fff8e1; color: #7a5c00; }
+    .badge-accepted  { background: #dff3e6; color: #1e7e42; }
+    .badge-rejected  { background: #fbe1e1; color: #a11d1d; }
+
+    .source-tag {
+        display: inline-block;
+        padding: 3px 9px;
+        border-radius: 10px;
+        font-size: 11px;
+        font-weight: 600;
+        background: #ede4f7;
+        color: #5e3b9c;
+        margin-left: 8px;
+        vertical-align: middle;
+    }
+
+    .suggestion-text {
+        font-size: 14px;
+        color: #333;
+        background: #f9fbfd;
+        border-radius: 6px;
+        padding: 12px 14px;
+        margin-bottom: 12px;
+        white-space: pre-wrap;
+    }
+
+    .drafted-wording {
+        font-size: 13.5px;
+        color: #1e7e42;
+        background: #eefaf1;
+        border: 1px solid #cdeed9;
+        border-radius: 6px;
+        padding: 12px 14px;
+        margin-bottom: 12px;
+        white-space: pre-wrap;
+    }
+
+    .drafted-wording .label {
+        display: block;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        color: #1e7e42;
+        margin-bottom: 6px;
+    }
+
+    .card-controls {
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .card-controls textarea {
+        flex: 1;
+        min-width: 240px;
+        min-height: 44px;
+        padding: 8px 10px;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        font-size: 13px;
+        font-family: inherit;
+        resize: vertical;
+    }
+
+    .btn { padding: 9px 20px; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .btn-accept { background: #1e7e42; color: white; }
+    .btn-accept:hover { background: #166534; }
+    .btn-reject { background: #a11d1d; color: white; }
+    .btn-reject:hover { background: #7f1616; }
+    .btn-save { background: linear-gradient(135deg, #1f4e78 0%, #2e5c8a 100%); color: white; }
+    .btn:disabled { opacity: 0.6; cursor: default; }
+
+    .save-status {
+        font-size: 12px;
+        margin-top: 8px;
+        min-height: 16px;
+    }
+
+    .save-status.ok { color: #1e7e42; }
+    .save-status.error { color: #a11d1d; }
+    .save-status.pending { color: #666; }
+
+    .view-link { color: #1f4e78; font-weight: 600; text-decoration: none; font-size: 12.5px; }
+    .view-link:hover { text-decoration: underline; }
+
+    .state-message { padding: 60px 30px; text-align: center; color: #666; font-size: 14px; }
+    .state-message.error { color: #a11d1d; }
+
+    .spinner {
+        width: 32px; height: 32px;
+        border: 3px solid #e8f4f8;
+        border-top: 3px solid #2e5c8a;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        margin: 0 auto 16px;
+    }
+
+    @keyframes spin { 100% { transform: rotate(360deg); } }
+
+    .not-configured {
+        margin: 20px 30px;
+        padding: 14px 18px;
+        background: #fff8e1;
+        border: 1px solid #f0d878;
+        border-radius: 8px;
+        font-size: 13.5px;
+        color: #7a5c00;
+    }
+
+    .not-configured code { background: rgba(0,0,0,0.06); padding: 2px 6px; border-radius: 4px; }
+</style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="header-logo">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 292" role="img" aria-label="UtiliSave — Info. Insights. Income."><g transform="translate(150,150) scale(0.72)"><g transform="rotate(0)"><path transform="rotate(13 0 -44)" d="M 0,-44 C 26,-74 52,-100 52,-138 C 52,-166 -52,-166 -52,-138 C -52,-100 -26,-74 0,-44 Z" fill="#EF4444"/></g><g transform="rotate(60)"><path transform="rotate(13 0 -44)" d="M 0,-44 C 26,-74 52,-100 52,-138 C 52,-166 -52,-166 -52,-138 C -52,-100 -26,-74 0,-44 Z" fill="#EC4899"/></g><g transform="rotate(120)"><path transform="rotate(13 0 -44)" d="M 0,-44 C 26,-74 52,-100 52,-138 C 52,-166 -52,-166 -52,-138 C -52,-100 -26,-74 0,-44 Z" fill="#3B82F6"/></g><g transform="rotate(180)"><path transform="rotate(13 0 -44)" d="M 0,-44 C 26,-74 52,-100 52,-138 C 52,-166 -52,-166 -52,-138 C -52,-100 -26,-74 0,-44 Z" fill="#14B8C4"/></g><g transform="rotate(240)"><path transform="rotate(13 0 -44)" d="M 0,-44 C 26,-74 52,-100 52,-138 C 52,-166 -52,-166 -52,-138 C -52,-100 -26,-74 0,-44 Z" fill="#22C55E"/></g><g transform="rotate(300)"><path transform="rotate(13 0 -44)" d="M 0,-44 C 26,-74 52,-100 52,-138 C 52,-166 -52,-166 -52,-138 C -52,-100 -26,-74 0,-44 Z" fill="#C8A14B"/></g></g><text x="322" y="172" font-family="Helvetica Neue,Arial,sans-serif" font-weight="600" font-size="118" fill="#0B3E76" letter-spacing="-3">UtiliSave<tspan font-size="36" dy="-52" font-weight="500">&#174;</tspan></text><text x="328" y="232" font-family="Helvetica Neue,Arial,sans-serif" font-weight="600" font-size="35" letter-spacing="3.4" fill="#0A2342">Info<tspan fill="#C8A14B">.</tspan> Insights<tspan fill="#C8A14B">.</tspan> Income<tspan fill="#C8A14B">.</tspan></text></svg>
+            </div>
+            <h1>Skill Suggestions — Admin Review</h1>
+            <p>Proposed additions to the Auditor Skills Framework, submitted by auditors</p>
+            <p class="confidential-notice">Private and confidential UtiliSave work product. Do not disseminate.</p>
+        </div>
+
+        <div id="notConfigured" class="not-configured" style="display:none;">
+            Repository not connected yet. Paste your Railway API URL into <code>REPO_API_URL</code> near the top of this page's code — same value as in <code>phase1_app.html</code>.
+        </div>
+
+        <div class="piles">
+            <button type="button" class="pile-button active" data-pile="Pending" onclick="switchPile('Pending')">Pending <span class="count" id="count-Pending">0</span></button>
+            <button type="button" class="pile-button" data-pile="Accepted" onclick="switchPile('Accepted')">Accepted <span class="count" id="count-Accepted">0</span></button>
+            <button type="button" class="pile-button" data-pile="Rejected" onclick="switchPile('Rejected')">Rejected <span class="count" id="count-Rejected">0</span></button>
+        </div>
+
+        <div class="toolbar">
+            <input type="text" id="searchBox" placeholder="Search by suggestion text, auditor, customer, case ID...">
+            <button type="button" class="refresh" onclick="loadSuggestions()">Refresh</button>
+            <span class="count-label" id="countLabel"></span>
+        </div>
+
+        <div id="stateMessage" class="state-message">
+            <div class="spinner"></div>
+            Loading suggestions...
+        </div>
+        <div id="cards" class="cards" style="display:none;"></div>
+    </div>
+
+    <script>
+        // Same Railway API URL as phase1_app.html / index.html / repository.html — keep these in sync.
+        const REPO_API_URL = window.US_API;
+        const DETAIL_PAGE = 'phase1_app.html';
+
+        let allSuggestions = [];
+        let currentPile = 'Pending';
+
+        function repositoryConfigured() {
+            if (!REPO_API_URL || REPO_API_URL.indexOf('PASTE_YOUR') === 0) {
+                document.getElementById('notConfigured').style.display = 'block';
+                document.getElementById('stateMessage').style.display = 'none';
+                return false;
+            }
+            return true;
+        }
+
+        function escapeHTML(str) {
+            return String(str ?? '').replace(/[&<>"']/g, c => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            }[c]));
+        }
+
+        function formatDate(value) {
+            if (!value) return '—';
+            const d = new Date(value);
+            if (Number.isNaN(d.getTime())) return '—';
+            return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+        }
+
+        function badgeClass(status) {
+            switch ((status || '').toLowerCase()) {
+                case 'accepted': return 'badge-accepted';
+                case 'rejected': return 'badge-rejected';
+                default: return 'badge-pending';
+            }
+        }
+
+        function switchPile(pile) {
+            currentPile = pile;
+            document.querySelectorAll('.pile-button').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.pile === pile);
+            });
+            renderCards();
+        }
+
+        function updatePileCounts() {
+            ['Pending', 'Accepted', 'Rejected'].forEach(status => {
+                document.getElementById(`count-${status}`).textContent =
+                    allSuggestions.filter(s => (s.Status || 'Pending') === status).length;
+            });
+        }
+
+        function renderCards() {
+            const query = document.getElementById('searchBox').value.trim().toLowerCase();
+
+            const filtered = allSuggestions.filter(s => {
+                if ((s.Status || 'Pending') !== currentPile) return false;
+                if (!query) return true;
+                const haystack = [
+                    s.Suggestion, s.AuditorName, s.CustomerName, s.CaseID,
+                    s.UtilityName, s.IssueType, s.SubmissionId, s.Source
+                ].join(' ').toLowerCase();
+                return haystack.includes(query);
+            });
+
+            updatePileCounts();
+            document.getElementById('countLabel').textContent =
+                `${filtered.length} in ${currentPile}`;
+
+            const cardsEl = document.getElementById('cards');
+
+            if (filtered.length === 0) {
+                cardsEl.style.display = 'none';
+                document.getElementById('stateMessage').style.display = 'block';
+                document.getElementById('stateMessage').className = 'state-message';
+                document.getElementById('stateMessage').innerHTML = allSuggestions.length === 0
+                    ? 'No skill suggestions submitted yet.'
+                    : `No ${currentPile.toLowerCase()} suggestions${query ? ' match your search' : ''}.`;
+                return;
+            }
+
+            document.getElementById('stateMessage').style.display = 'none';
+            cardsEl.style.display = 'flex';
+
+            cardsEl.innerHTML = filtered.map(s => {
+                const status = s.Status || 'Pending';
+                const pileClass = status.toLowerCase();
+
+                let controlsHtml = '';
+                if (status === 'Pending') {
+                    controlsHtml = `
+                        <div class="card-controls">
+                            <button type="button" class="btn btn-accept" id="accept-${s.SuggestionId}" onclick="acceptSuggestion(${s.SuggestionId})">Accept</button>
+                            <button type="button" class="btn btn-reject" id="reject-${s.SuggestionId}" onclick="rejectSuggestion(${s.SuggestionId})">Reject</button>
+                        </div>
+                    `;
+                } else {
+                    // Accepted/Rejected: no status-changing action — just notes.
+                    controlsHtml = `
+                        <div class="card-controls">
+                            <textarea id="notes-${s.SuggestionId}" placeholder="Admin notes (optional)">${escapeHTML(s.AdminNotes || '')}</textarea>
+                            <button type="button" class="btn btn-save" onclick="saveNotes(${s.SuggestionId})">Save Notes</button>
+                        </div>
+                    `;
+                }
+
+                let draftedHtml = '';
+                if (status === 'Accepted') {
+                    draftedHtml = `
+                        <div class="drafted-wording">
+                            <span class="label">Adopted framework wording (editable)</span>
+                            <textarea id="wording-${s.SuggestionId}" style="width:100%; min-height:70px; font-family:inherit; font-size:13.5px; border:1px solid #cdeed9; border-radius:6px; padding:8px; background:white; color:#333; resize:vertical;">${escapeHTML(s.DraftedWording || '')}</textarea>
+                            <div style="margin-top:8px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                                <button type="button" class="btn btn-save" onclick="generateSkillMd(${s.SuggestionId})">Write Skill MD</button>
+                                <span style="font-size:11px; color:#666;">Uses whatever's currently in the box above — edit it first if needed.</span>
+                            </div>
+                            <div class="save-status" id="skillMdStatus-${s.SuggestionId}"></div>
+                            ${s.SkillMarkdown ? skillMdResultBlock(s.SuggestionId, s.SkillMarkdown) : `<div id="skillMdResult-${s.SuggestionId}"></div>`}
+                        </div>
+                    `;
+                } else if (s.DraftedWording) {
+                    draftedHtml = `
+                        <div class="drafted-wording">
+                            <span class="label">Drafted framework wording</span>
+                            ${escapeHTML(s.DraftedWording)}
+                        </div>
+                    `;
+                }
+
+                return `
+                    <div class="card ${pileClass}" id="card-${s.SuggestionId}">
+                        <div class="card-header">
+                            <div>
+                                <div class="card-title">${escapeHTML(s.CustomerName)} — ${escapeHTML(s.CaseID) || '(no case ID)'}${s.Source === 'critique' ? '<span class="source-tag">From Letter Critique</span>' : ''}</div>
+                                <div class="card-meta">
+                                    Submitted by ${escapeHTML(s.AuditorName) || 'unknown'} on ${formatDate(s.CreatedAt)}
+                                    &nbsp;&middot;&nbsp;
+                                    <a class="view-link" href="${DETAIL_PAGE}?submissionId=${encodeURIComponent(s.SubmissionId)}" target="_blank" rel="noopener">View case &rarr;</a>
+                                </div>
+                            </div>
+                            <span class="badge ${badgeClass(status)}">${escapeHTML(status)}</span>
+                        </div>
+
+                        <div class="suggestion-text">${escapeHTML(s.Suggestion)}</div>
+                        ${draftedHtml}
+                        ${controlsHtml}
+                        <div class="save-status" id="saveStatus-${s.SuggestionId}"></div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function loadSuggestions() {
+            if (!repositoryConfigured()) return;
+
+            document.getElementById('stateMessage').style.display = 'block';
+            document.getElementById('cards').style.display = 'none';
+            document.getElementById('stateMessage').className = 'state-message';
+            document.getElementById('stateMessage').innerHTML = '<div class="spinner"></div>Loading suggestions...';
+
+            fetch(`${REPO_API_URL}/suggestions`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.error) {
+                        document.getElementById('stateMessage').className = 'state-message error';
+                        document.getElementById('stateMessage').textContent = 'Error loading suggestions: ' + data.error;
+                        return;
+                    }
+                    allSuggestions = data.suggestions || [];
+                    renderCards();
+                })
+                .catch(err => {
+                    document.getElementById('stateMessage').className = 'state-message error';
+                    document.getElementById('stateMessage').textContent = 'Error loading suggestions: ' + err.message;
+                });
+        }
+
+        // Accept: moves the suggestion into the Accepted pile. The backend also
+        // asks Claude to draft the exact wording to add to the framework — that
+        // can take a few seconds, so the button shows a working state until it
+        // comes back (Michael still has to paste the wording into the actual
+        // framework himself; this API can't edit project instructions/skills).
+        function acceptSuggestion(id) {
+            const acceptBtn = document.getElementById(`accept-${id}`);
+            const rejectBtn = document.getElementById(`reject-${id}`);
+            const statusEl = document.getElementById(`saveStatus-${id}`);
+            acceptBtn.disabled = true;
+            rejectBtn.disabled = true;
+            statusEl.className = 'save-status pending';
+            statusEl.textContent = 'Accepting and drafting framework wording...';
+
+            fetch(`${REPO_API_URL}/suggestions/${id}/accept`, { method: 'POST' })
+                .then(r => r.json())
+                .then(result => {
+                    if (result.error) {
+                        statusEl.className = 'save-status error';
+                        statusEl.textContent = 'Error: ' + result.error;
+                        acceptBtn.disabled = false;
+                        rejectBtn.disabled = false;
+                        return;
+                    }
+                    const local = allSuggestions.find(s => s.SuggestionId === id);
+                    if (local) {
+                        local.Status = result.Status;
+                        local.DraftedWording = result.DraftedWording;
+                        local.UpdatedAt = result.UpdatedAt;
+                    }
+                    if (result.aiConfigured === false) {
+                        alert('Accepted — but AI wording drafting is not configured on the backend yet (ANTHROPIC_API_KEY is not set), so no draft wording was generated. Add it yourself, or set up the API key and re-open this suggestion.');
+                    }
+                    renderCards();
+                })
+                .catch(err => {
+                    statusEl.className = 'save-status error';
+                    statusEl.textContent = 'Error: ' + err.message;
+                    acceptBtn.disabled = false;
+                    rejectBtn.disabled = false;
+                });
+        }
+
+        // Reject: moves the suggestion into the Rejected pile. No further action.
+        function rejectSuggestion(id) {
+            const acceptBtn = document.getElementById(`accept-${id}`);
+            const rejectBtn = document.getElementById(`reject-${id}`);
+            const statusEl = document.getElementById(`saveStatus-${id}`);
+            acceptBtn.disabled = true;
+            rejectBtn.disabled = true;
+            statusEl.className = 'save-status pending';
+            statusEl.textContent = 'Rejecting...';
+
+            fetch(`${REPO_API_URL}/suggestions/${id}/reject`, { method: 'POST' })
+                .then(r => r.json())
+                .then(result => {
+                    if (result.error) {
+                        statusEl.className = 'save-status error';
+                        statusEl.textContent = 'Error: ' + result.error;
+                        acceptBtn.disabled = false;
+                        rejectBtn.disabled = false;
+                        return;
+                    }
+                    const local = allSuggestions.find(s => s.SuggestionId === id);
+                    if (local) { local.Status = result.Status; local.UpdatedAt = result.UpdatedAt; }
+                    renderCards();
+                })
+                .catch(err => {
+                    statusEl.className = 'save-status error';
+                    statusEl.textContent = 'Error: ' + err.message;
+                    acceptBtn.disabled = false;
+                    rejectBtn.disabled = false;
+                });
+        }
+
+        // Accepted/Rejected cards keep an editable admin-notes box (e.g. "folded
+        // into framework on 8/1" or "rejected — too narrow a fact pattern").
+        function saveNotes(id) {
+            const adminNotes = document.getElementById(`notes-${id}`).value;
+            const statusEl = document.getElementById(`saveStatus-${id}`);
+            statusEl.className = 'save-status pending';
+            statusEl.textContent = 'Saving notes...';
+
+            fetch(`${REPO_API_URL}/suggestions/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ adminNotes })
+            })
+                .then(r => r.json())
+                .then(result => {
+                    if (result.error) {
+                        statusEl.className = 'save-status error';
+                        statusEl.textContent = 'Error: ' + result.error;
+                        return;
+                    }
+                    statusEl.className = 'save-status ok';
+                    statusEl.textContent = `Saved at ${formatDate(result.UpdatedAt)}`;
+                    const local = allSuggestions.find(s => s.SuggestionId === id);
+                    if (local) local.AdminNotes = result.AdminNotes;
+                })
+                .catch(err => {
+                    statusEl.className = 'save-status error';
+                    statusEl.textContent = 'Error: ' + err.message;
+                });
+        }
+
+        // Read-only result box shown once a SKILL.md has been generated for a
+        // suggestion. Used both when first rendering a card (if SkillMarkdown
+        // was already cached from a prior visit) and to swap in the result
+        // live after generateSkillMd() succeeds.
+        function skillMdResultBlock(id, markdown) {
+            return `
+                <div id="skillMdResult-${id}" style="margin-top:12px; padding-top:12px; border-top:1px dashed #cdeed9;">
+                    <div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.4px; color:#1f4e78; margin-bottom:6px;">Generated SKILL.md</div>
+                    <textarea id="skillMdText-${id}" readonly style="width:100%; min-height:160px; font-family:'Courier New',monospace; font-size:12px; border:1px solid #ddd; border-radius:6px; padding:8px; background:#fafafa; color:#333;">${escapeHTML(markdown)}</textarea>
+                    <div style="margin-top:8px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                        <button type="button" class="btn btn-save" onclick="copySkillMd(${id})">Copy</button>
+                        <span style="font-size:11.5px; color:#666;">To use it: bring this text into a Claude chat and ask Claude to package it as an installable skill file (one-click "Save skill" button) — or paste it yourself under Settings &rarr; Capabilities &rarr; Skills.</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Calls Claude (via the backend) to turn the current wording in the
+        // editable box into a complete SKILL.md file. Saves both the wording
+        // (in case it was just edited) and the generated file together, then
+        // swaps in the result box without a full re-render.
+        function generateSkillMd(id) {
+            const wording = document.getElementById(`wording-${id}`).value;
+            const statusEl = document.getElementById(`skillMdStatus-${id}`);
+            if (!wording.trim()) {
+                statusEl.className = 'save-status error';
+                statusEl.textContent = 'Add some wording in the box above first.';
+                return;
+            }
+            statusEl.className = 'save-status pending';
+            statusEl.textContent = 'Writing the skill file (this can take a few seconds)...';
+
+            fetch(`${REPO_API_URL}/suggestions/${id}/generate-skill`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ draftedWording: wording })
+            })
+                .then(r => r.json())
+                .then(result => {
+                    if (result.error) {
+                        statusEl.className = 'save-status error';
+                        statusEl.textContent = 'Error: ' + result.error;
+                        return;
+                    }
+                    statusEl.className = 'save-status ok';
+                    statusEl.textContent = `Generated at ${formatDate(result.UpdatedAt)}.`;
+                    const local = allSuggestions.find(s => s.SuggestionId === id);
+                    if (local) {
+                        local.DraftedWording = result.DraftedWording;
+                        local.SkillMarkdown = result.SkillMarkdown;
+                    }
+                    const resultHolder = document.getElementById(`skillMdResult-${id}`);
+                    if (resultHolder) resultHolder.outerHTML = skillMdResultBlock(id, result.SkillMarkdown);
+                })
+                .catch(err => {
+                    statusEl.className = 'save-status error';
+                    statusEl.textContent = 'Error: ' + err.message;
+                });
+        }
+
+        function copySkillMd(id) {
+            const text = document.getElementById(`skillMdText-${id}`).value;
+            const statusEl = document.getElementById(`skillMdStatus-${id}`);
+            navigator.clipboard.writeText(text).then(() => {
+                statusEl.className = 'save-status ok';
+                statusEl.textContent = 'Copied to clipboard.';
+            }).catch(() => {
+                alert('Could not copy automatically — select the text in the box and copy manually.');
+            });
+        }
+
+        document.getElementById('searchBox').addEventListener('input', renderCards);
+
+        document.addEventListener('us-auth-ready', function () { loadSuggestions(); });
+    </script>
+</body>
+</html>

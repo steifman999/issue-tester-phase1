@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Sign-in gate. Administrators only. -->
+    <script src="auth.js" data-require="admin"></script>
+<title>UtiliSave Issue Management Console</title>
+<style>
+    :root {
+        --navy: #0B3E76;
+        --navy-dark: #0A2342;
+        --gold: #C8A14B;
+        --line: #e3e8ee;
+        --ink: #1a2129;
+        --muted: #6b7785;
+        --bg: #f4f6f9;
+    }
+    * { box-sizing: border-box; }
+    body {
+        margin: 0; background: var(--bg); color: var(--ink);
+        font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif;
+        font-size: 14px; line-height: 1.5;
+    }
+    .topbar {
+        background: linear-gradient(135deg, var(--navy-dark), var(--navy));
+        color: #fff; padding: 20px 28px;
+        display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap;
+    }
+    .topbar h1 { margin: 0; font-size: 21px; font-weight: 600; letter-spacing: -0.3px; }
+    .topbar .sub { font-size: 12px; opacity: .82; margin-top: 3px; }
+    .topbar .actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .wrap { padding: 22px 28px 60px; }
+
+    button {
+        font-family: inherit; font-size: 13px; cursor: pointer;
+        border-radius: 6px; border: 1px solid transparent; padding: 8px 16px;
+    }
+    .btn { background: var(--navy); color: #fff; }
+    .btn:hover { background: #0d4b8f; }
+    .btn-ghost { background: rgba(255,255,255,.12); color: #fff; border-color: rgba(255,255,255,.3); }
+    .btn-ghost:hover { background: rgba(255,255,255,.22); }
+    .btn-light { background: #fff; color: var(--navy); border-color: var(--line); }
+    .btn-light:hover { background: #f0f4f9; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+
+    .banner { padding: 13px 18px; border-radius: 8px; margin-bottom: 18px; font-size: 13px; line-height: 1.65; }
+    .banner.err { background: #fdecea; border: 1px solid #f5c2bd; color: #7d211a; }
+    .banner.warn { background: #fff8e1; border: 1px solid #f0dca8; color: #6d5410; }
+    .banner.ok { background: #e8f5ec; border: 1px solid #b8dfc4; color: #1c5c31; }
+    .banner code { background: rgba(0,0,0,.06); padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+
+    .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .kpi { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; cursor: pointer; transition: box-shadow .15s, border-color .15s; }
+    .kpi:hover { box-shadow: 0 2px 10px rgba(11,62,118,.09); border-color: #c9d6e4; }
+    .kpi.active { border-color: var(--navy); box-shadow: 0 0 0 1px var(--navy) inset; }
+    .kpi .label { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); }
+    .kpi .value { font-size: 24px; font-weight: 600; color: var(--navy); margin-top: 5px; letter-spacing: -.5px; }
+    .kpi .value.alert { color: #b3261e; }
+    .kpi .foot { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+    .panel { background: #fff; border: 1px solid var(--line); border-radius: 10px; }
+    .filters { padding: 14px 16px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; border-bottom: 1px solid var(--line); }
+    .filters input, .filters select {
+        font-family: inherit; font-size: 13px; padding: 8px 10px;
+        border: 1px solid var(--line); border-radius: 6px; background: #fff; color: var(--ink);
+    }
+    .filters input[type=search] { min-width: 250px; flex: 1; }
+    .filters .spacer { flex: 1; }
+
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); font-weight: 600; cursor: pointer; white-space: nowrap; background: #fafbfd; position: sticky; top: 0; z-index: 2; }
+    th:hover { color: var(--navy); }
+    th .arrow { opacity: .45; font-size: 10px; }
+    tbody tr { cursor: pointer; }
+    tbody tr:hover { background: #f7f9fc; }
+    tbody tr.sel { background: #eef4fb; }
+    td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .tablewrap { max-height: 62vh; overflow: auto; }
+    .id { font-family: Consolas, 'SF Mono', Menlo, monospace; font-size: 11.5px; color: var(--muted); }
+    .cust { font-weight: 600; }
+
+    .pill { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+    .pill.review { background: #e6eefc; color: #1a4a8f; }
+    .pill.submitted { background: #e5f2ff; color: #0b5394; }
+    .pill.utility { background: #ede7f6; color: #4527a0; }
+    .pill.adjusted { background: #e8f5ec; color: #1c5c31; }
+    .pill.rejected { background: #fdecea; color: #9b2620; }
+    .pill.closed { background: #eceff1; color: #546e7a; }
+    .pill.appeal { background: #fff3cd; color: #7a5c00; }
+    .pri { font-size: 11px; font-weight: 600; }
+    .pri.High { color: #b3261e; }
+    .pri.Normal { color: var(--muted); }
+    .pri.Low { color: #9aa5b1; }
+    .score { font-weight: 700; }
+    .score.good { color: #1c5c31; }
+    .score.mid { color: #a67102; }
+    .score.bad { color: #b3261e; }
+    .due.over { color: #b3261e; font-weight: 600; }
+
+    .scrim { position: fixed; inset: 0; background: rgba(10,35,66,.45); display: none; z-index: 40; }
+    .drawer {
+        position: fixed; top: 0; right: 0; height: 100%; width: min(780px, 96vw);
+        background: #fff; z-index: 50; display: none; flex-direction: column;
+        box-shadow: -6px 0 30px rgba(10,35,66,.22);
+    }
+    .drawer.open, .scrim.open { display: flex; }
+    .drawer .dhead {
+        background: linear-gradient(135deg, var(--navy-dark), var(--navy)); color: #fff;
+        padding: 16px 22px; display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    }
+    .drawer .dhead h2 { margin: 0; font-size: 17px; font-weight: 600; }
+    .drawer .dhead .sub { font-size: 12px; opacity: .82; margin-top: 3px; }
+    .drawer .body { overflow-y: auto; padding: 20px 22px 40px; flex: 1; }
+    .drawer h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .6px; color: var(--navy); margin: 26px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+    .drawer h3:first-child { margin-top: 0; }
+    .kv { display: grid; grid-template-columns: 200px 1fr; gap: 6px 14px; font-size: 13px; margin: 0; }
+    .kv dt { color: var(--muted); }
+    .kv dd { margin: 0; font-weight: 500; }
+    .field { margin-bottom: 12px; }
+    .field label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); margin-bottom: 4px; }
+    .field input, .field select, .field textarea {
+        width: 100%; font-family: inherit; font-size: 13px; padding: 8px 10px;
+        border: 1px solid var(--line); border-radius: 6px; background: #fff; color: var(--ink);
+    }
+    .field textarea { min-height: 70px; resize: vertical; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .timeline { border-left: 2px solid var(--line); padding-left: 18px; margin-left: 4px; }
+    .tl { margin-bottom: 14px; position: relative; font-size: 12.5px; }
+    .tl:before { content: ''; position: absolute; left: -24px; top: 5px; width: 9px; height: 9px; border-radius: 50%; background: var(--navy); }
+    .tl .when { color: var(--muted); font-size: 11px; }
+    .prose { white-space: pre-wrap; background: #f7f9fc; border: 1px solid var(--line); border-radius: 6px; padding: 13px; font-size: 12.5px; line-height: 1.6; max-height: 320px; overflow: auto; }
+    .filelist a { display: block; font-size: 12.5px; color: var(--navy); padding: 5px 0; }
+    .empty { padding: 38px 20px; text-align: center; color: var(--muted); font-size: 13px; }
+    .savebar { background: #fff; border-top: 1px solid var(--line); padding: 12px 22px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .savemsg { font-size: 12px; }
+    .confid { font-size: 11px; color: var(--muted); margin-top: 22px; text-align: center; }
+    @media print {
+        .topbar .actions, .filters, .scrim, .drawer, .savebar { display: none !important; }
+        body { background: #fff; }
+        .tablewrap { max-height: none; overflow: visible; }
+    }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+    <div>
+        <h1>Issue Management Console</h1>
+        <div class="sub">UtiliSave &mdash; submissions, review status, and outcomes. Private and confidential work product.</div>
+    </div>
+    <div class="actions">
+        <span id="conn" style="font-size:12px; opacity:.85;">Connecting&hellip;</span>
+        <button class="btn-ghost" onclick="loadAll()">Refresh</button>
+        <button class="btn-ghost" onclick="exportCsv()">Export CSV</button>
+        <button class="btn-ghost" onclick="window.print()">Print</button>
+        <button class="btn-ghost" onclick="togglePeople()">People &amp; logins</button>
+        <button class="btn-ghost" onclick="openForm()">Submission form</button>
+    </div>
+</div>
+
+<div class="wrap">
+    <div id="banner"></div>
+
+    <div class="panel" id="peoplePanel" style="display:none; margin-bottom:20px;">
+        <div class="filters" style="justify-content:space-between;">
+            <strong style="font-size:14px; color:var(--navy);">People &amp; logins</strong>
+            <span style="font-size:12px; color:var(--muted); flex:1;">Everyone who can sign in. Auditors get the submission form only; administrators also get this console.</span>
+            <button class="btn-light" onclick="testEmail()">Send test email</button>
+        </div>
+        <div style="padding:16px;">
+            <div class="grid2" style="grid-template-columns:1.2fr 1.2fr .8fr auto; align-items:end; gap:10px;">
+                <div class="field" style="margin:0;"><label for="nuName">Full name</label><input id="nuName" type="text" placeholder="Matthew Sands"></div>
+                <div class="field" style="margin:0;"><label for="nuEmail">Email</label><input id="nuEmail" type="email" placeholder="msands@utilisave.com"></div>
+                <div class="field" style="margin:0;"><label for="nuRole">Access</label><select id="nuRole"><option value="auditor">Auditor</option><option value="admin">Administrator</option></select></div>
+                <button class="btn" id="nuBtn" onclick="createUser()" style="height:36px;">Create &amp; email login</button>
+            </div>
+            <div id="userMsg" style="display:none; margin-top:12px; padding:12px; border-radius:6px; font-size:13px; line-height:1.6;"></div>
+            <div style="margin-top:16px; overflow:auto;">
+                <table>
+                    <thead><tr>
+                        <th style="cursor:default;">Name</th><th style="cursor:default;">Email</th>
+                        <th style="cursor:default;">Access</th><th style="cursor:default;">State</th>
+                        <th style="cursor:default;">Last signed in</th><th style="cursor:default;">Actions</th>
+                    </tr></thead>
+                    <tbody id="userRows"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="kpis" id="kpis"></div>
+
+    <div class="panel">
+        <div class="filters">
+            <input type="search" id="q" placeholder="Search customer, account, auditor, internal ID, utility ID&hellip;" oninput="render()">
+            <select id="fStatus" onchange="render()"><option value="">All statuses</option></select>
+            <select id="fUtility" onchange="render()"><option value="">All utilities</option></select>
+            <select id="fAuditor" onchange="render()"><option value="">All auditors</option></select>
+            <select id="fPriority" onchange="render()"><option value="">All priorities</option><option>High</option><option>Normal</option><option>Low</option></select>
+            <select id="fScore" onchange="render()">
+                <option value="">Any score</option>
+                <option value="none">Not scored</option>
+                <option value="lt75">Below 75 (CEO approval)</option>
+                <option value="gte75">75 and above</option>
+            </select>
+            <div class="spacer"></div>
+            <span id="count" style="font-size:12px; color:var(--muted);"></span>
+        </div>
+        <div class="tablewrap">
+            <table>
+                <thead><tr id="head"></tr></thead>
+                <tbody id="rows"></tbody>
+            </table>
+        </div>
+    </div>
+    <div class="confid">Private and confidential UtiliSave work product. Do not disseminate.</div>
+</div>
+
+<div class="scrim" id="scrim" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer">
+    <div class="dhead">
+        <div style="flex:1;">
+            <h2 id="dTitle">&nbsp;</h2>
+            <div class="sub" id="dSub">&nbsp;</div>
+        </div>
+        <button class="btn-ghost" onclick="closeDrawer()">Close</button>
+    </div>
+    <div class="body" id="dBody"><div class="empty">Select a submission.</div></div>
+    <div class="savebar">
+        <button class="btn" id="saveBtn" onclick="saveManagement()">Save changes</button>
+        <button class="btn-light" onclick="resendNotify()">Re-send email</button>
+        <a id="zipLink" class="btn-light" style="text-decoration:none; padding:8px 16px; display:inline-block;" href="#" target="_blank" rel="noopener">Download case ZIP</a>
+        <span class="savemsg" id="saveMsg"></span>
+    </div>
+</div>
+
+<script>
+// The API this console reads. Must match APPS_SCRIPT_URL in index.html.
+const API = window.US_API;
+// Where the auditor submission form lives, for the header button.
+const FORM_URL = 'index.html';
+
+let ALL = [];          // every submission from GET /?action=list
+let VIEW = [];         // after filters
+let sortKey = 'UpdatedAt';
+let sortDir = -1;
+let selected = null;   // currently open row
+let detail = null;     // its full history payload
+let kpiFilter = null;
+
+// ---------- helpers ----------
+function esc(v) {
+    return String(v === null || v === undefined ? '' : v)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function num(v) { const n = Number(v); return isNaN(n) ? 0 : n; }
+function total(r) { return num(r.FinancialImpactRefund) + num(r.FinancialImpactFuture); }
+function money(v) { return '$' + num(v).toLocaleString('en-US', { maximumFractionDigits: 0 }); }
+function fmtDate(v) {
+    if (!v) return '—';
+    const d = new Date(v);
+    if (isNaN(d)) return esc(v);
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+function fmtDateTime(v) {
+    if (!v) return '—';
+    const d = new Date(v);
+    if (isNaN(d)) return esc(v);
+    return d.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+function statusClass(s) {
+    const t = String(s || '').toLowerCase();
+    if (t.includes('reject') || t.includes('denied')) return 'rejected';
+    if (t.includes('adjust') || t.includes('approved') || t.includes('paid')) return 'adjusted';
+    if (t.includes('utility')) return 'utility';
+    if (t.includes('closed')) return 'closed';
+    if (t.includes('appeal')) return 'appeal';
+    if (t.includes('submit')) return 'submitted';
+    return 'review';
+}
+function statusPill(s) { return '<span class="pill ' + statusClass(s) + '">' + esc(s || 'Under Review') + '</span>'; }
+function scoreCell(v) {
+    if (v === null || v === undefined) return '<span class="id">—</span>';
+    const n = Number(v);
+    const cls = n >= 80 ? 'good' : (n >= 75 ? 'mid' : 'bad');
+    return '<span class="score ' + cls + '">' + n + '</span>';
+}
+function isOverdue(v) { return !!v && new Date(v) < new Date(new Date().toDateString()); }
+function dueCell(v) {
+    if (!v) return '<span class="id">—</span>';
+    return '<span class="due ' + (isOverdue(v) ? 'over' : '') + '">' + fmtDate(v) + '</span>';
+}
+function setBanner(kind, html) {
+    document.getElementById('banner').innerHTML = html ? '<div class="banner ' + kind + '">' + html + '</div>' : '';
+}
+
+const COLUMNS = [
+    { key: 'CaseID',       label: 'Internal ID', render: r => '<div class="id">' + esc(r.CaseID || '—') + '</div><div class="id" style="opacity:.6;">' + esc(r.SubmissionId) + '</div>' },
+    { key: 'CustomerName', label: 'Customer',    render: r => '<div class="cust">' + esc(r.CustomerName) + '</div><div class="id">' + esc(r.AccountNumber || '') + '</div>' },
+    { key: 'UtilityName',  label: 'Utility',     render: r => esc(r.UtilityName) + '<div class="id">' + esc(r.UtilityType || '') + '</div>' },
+    { key: 'IssueType',    label: 'Issue type',  render: r => esc(r.IssueType || '') },
+    { key: 'AuditorName',  label: 'Auditor',     render: r => esc(r.AuditorName || '') },
+    { key: 'Total',        label: 'At stake',    cls: 'num', render: r => '<strong>' + money(total(r)) + '</strong><div class="id">' + money(r.FinancialImpactRefund) + ' + ' + money(r.FinancialImpactFuture) + '</div>' },
+    { key: 'LatestScore',  label: 'Score',       cls: 'num', render: r => scoreCell(r.LatestScore) },
+    { key: 'Status',       label: 'Status',      render: r => statusPill(r.Status) + (r.LatestRound > 1 ? ' <span class="pill appeal">Round ' + r.LatestRound + '</span>' : '') },
+    { key: 'Priority',     label: 'Priority',    render: r => '<span class="pri ' + esc(r.Priority || 'Normal') + '">' + esc(r.Priority || 'Normal') + '</span>' },
+    { key: 'AssignedTo',   label: 'Owner',       render: r => esc(r.AssignedTo || '—') },
+    { key: 'DueDate',      label: 'Next date',   render: r => dueCell(r.DueDate) },
+    { key: 'UpdatedAt',    label: 'Updated',     cls: 'num', render: r => '<span class="id">' + fmtDate(r.UpdatedAt) + '</span>' }
+];
+
+// ---------- load ----------
+function applyList(data) {
+    ALL = data.submissions || [];
+    document.getElementById('conn').textContent = 'Connected · ' + ALL.length + ' case(s) · ' + new Date().toLocaleTimeString();
+    setBanner('', '');
+    fillFilterOptions();
+    render();
+}
+
+function showOffline(err) {
+    document.getElementById('conn').textContent = 'Offline';
+    setBanner('err',
+        '<strong>Cannot reach the submissions API.</strong> ' + esc(err.message) +
+        '<br><br>Check these in order:<br>' +
+        '1. Open <code>' + esc(API) + '</code> in a new tab. It should return <code>{"status":"ok"}</code>. An error there means the API service itself is down, crashed on boot, or was never deployed.<br>' +
+        '2. If that URL works but this page still fails, you are almost certainly opening this console as a local <code>file://</code> page. Serve it over <code>https://</code> (GitHub Pages) instead.<br>' +
+        '3. In Railway, open the <code>issue-review-api</code> service &rarr; Deployments: the newest deploy must show <em>Active</em>. If it crashed, the logs usually name a bad or missing <code>DATABASE_URL</code>.');
+    ALL = [];
+    render();
+}
+
+function loadAll() {
+    document.getElementById('conn').textContent = 'Loading…';
+    return fetch(API + '/?action=list')
+        .then(r => { if (!r.ok) throw new Error('The API answered HTTP ' + r.status + '.'); return r.json(); })
+        .then(data => { if (data.error) throw new Error(data.error); applyList(data); })
+        .catch(showOffline);
+}
+
+function fillFilterOptions() {
+    const fill = (id, values) => {
+        const sel = document.getElementById(id);
+        const current = sel.value;
+        const first = sel.options[0];
+        sel.innerHTML = '';
+        sel.appendChild(first);
+        values.filter(Boolean).sort().forEach(v => {
+            const o = document.createElement('option');
+            o.value = v; o.textContent = v;
+            sel.appendChild(o);
+        });
+        sel.value = current;
+    };
+    fill('fStatus', Array.from(new Set(ALL.map(r => r.Status))));
+    fill('fUtility', Array.from(new Set(ALL.map(r => r.UtilityName))));
+    fill('fAuditor', Array.from(new Set(ALL.map(r => r.AuditorName))));
+}
+
+// ---------- KPI tiles (each one is also a filter) ----------
+function renderKpis() {
+    const open = ALL.filter(r => !/closed|adjusted|rejected/i.test(r.Status || ''));
+    const atUtility = ALL.filter(r => /utility/i.test(r.Status || ''));
+    const rejected = ALL.filter(r => /reject|denied/i.test(r.Status || ''));
+    const won = ALL.filter(r => /adjust|approved|paid/i.test(r.Status || ''));
+    const below = ALL.filter(r => r.LatestScore !== null && r.LatestScore !== undefined && Number(r.LatestScore) < 75);
+    const unassigned = ALL.filter(r => !r.AssignedTo);
+    const overdue = ALL.filter(r => isOverdue(r.DueDate));
+
+    const tiles = [
+        { id: null,         label: 'All cases',        value: ALL.length,        foot: money(ALL.reduce((s, r) => s + total(r), 0)) + ' total' },
+        { id: 'open',       label: 'Open',             value: open.length,       foot: money(open.reduce((s, r) => s + total(r), 0)) + ' in play' },
+        { id: 'utility',    label: 'With the utility', value: atUtility.length,  foot: 'awaiting a response' },
+        { id: 'won',        label: 'Adjusted / won',   value: won.length,        foot: money(won.reduce((s, r) => s + total(r), 0)) + ' recovered' },
+        { id: 'rejected',   label: 'Rejected',         value: rejected.length,   foot: 'appeal candidates' },
+        { id: 'below',      label: 'Score below 75',   value: below.length,      foot: 'CEO approval required', alert: below.length > 0 },
+        { id: 'unassigned', label: 'Unassigned',       value: unassigned.length, foot: 'no owner set', alert: unassigned.length > 0 },
+        { id: 'overdue',    label: 'Past next date',   value: overdue.length,    foot: 'follow-up overdue', alert: overdue.length > 0 }
+    ];
+
+    document.getElementById('kpis').innerHTML = tiles.map(t =>
+        '<div class="kpi ' + (t.id && kpiFilter === t.id ? 'active' : '') + '" onclick="setKpi(' + (t.id ? "'" + t.id + "'" : 'null') + ')">' +
+            '<div class="label">' + esc(t.label) + '</div>' +
+            '<div class="value ' + (t.alert ? 'alert' : '') + '">' + t.value + '</div>' +
+            '<div class="foot">' + esc(t.foot) + '</div>' +
+        '</div>').join('');
+}
+
+function setKpi(id) { kpiFilter = (kpiFilter === id) ? null : id; render(); }
+
+function passesKpi(r) {
+    switch (kpiFilter) {
+        case 'open':       return !/closed|adjusted|rejected/i.test(r.Status || '');
+        case 'utility':    return /utility/i.test(r.Status || '');
+        case 'won':        return /adjust|approved|paid/i.test(r.Status || '');
+        case 'rejected':   return /reject|denied/i.test(r.Status || '');
+        case 'below':      return r.LatestScore !== null && r.LatestScore !== undefined && Number(r.LatestScore) < 75;
+        case 'unassigned': return !r.AssignedTo;
+        case 'overdue':    return isOverdue(r.DueDate);
+        default:           return true;
+    }
+}
+
+// ---------- table ----------
+function render() {
+    renderKpis();
+
+    const q = document.getElementById('q').value.trim().toLowerCase();
+    const fs = document.getElementById('fStatus').value;
+    const fu = document.getElementById('fUtility').value;
+    const fa = document.getElementById('fAuditor').value;
+    const fp = document.getElementById('fPriority').value;
+    const fsc = document.getElementById('fScore').value;
+
+    VIEW = ALL.filter(r => {
+        if (!passesKpi(r)) return false;
+        if (fs && r.Status !== fs) return false;
+        if (fu && r.UtilityName !== fu) return false;
+        if (fa && r.AuditorName !== fa) return false;
+        if (fp && (r.Priority || 'Normal') !== fp) return false;
+        const scored = r.LatestScore !== null && r.LatestScore !== undefined;
+        if (fsc === 'none' && scored) return false;
+        if (fsc === 'lt75' && !(scored && Number(r.LatestScore) < 75)) return false;
+        if (fsc === 'gte75' && !(scored && Number(r.LatestScore) >= 75)) return false;
+        if (q) {
+            const hay = [r.SubmissionId, r.CaseID, r.UtilityCaseID, r.CustomerName, r.AccountNumber,
+                         r.AuditorName, r.UtilityName, r.UtilityType, r.IssueType, r.Status,
+                         r.AssignedTo, r.AdminNotes].join(' ').toLowerCase();
+            if (hay.indexOf(q) === -1) return false;
+        }
+        return true;
+    });
+
+    VIEW.sort((a, b) => {
+        let x = sortKey === 'Total' ? total(a) : a[sortKey];
+        let y = sortKey === 'Total' ? total(b) : b[sortKey];
+        if (x === null || x === undefined) x = '';
+        if (y === null || y === undefined) y = '';
+        if (typeof x === 'number' && typeof y === 'number') return (x - y) * sortDir;
+        return String(x).localeCompare(String(y)) * sortDir;
+    });
+
+    document.getElementById('head').innerHTML = COLUMNS.map(c =>
+        '<th onclick="sortBy(\'' + c.key + '\')">' + esc(c.label) +
+        (sortKey === c.key ? ' <span class="arrow">' + (sortDir === 1 ? '▲' : '▼') + '</span>' : '') + '</th>').join('');
+
+    document.getElementById('rows').innerHTML = VIEW.length
+        ? VIEW.map(r => '<tr onclick="openDetail(\'' + r.SubmissionId + '\')" class="' + (selected && selected.SubmissionId === r.SubmissionId ? 'sel' : '') + '">' +
+            COLUMNS.map(c => '<td class="' + (c.cls || '') + '">' + c.render(r) + '</td>').join('') + '</tr>').join('')
+        : '<tr><td colspan="' + COLUMNS.length + '"><div class="empty">' +
+            (ALL.length ? 'No cases match these filters.' : 'No submissions in the repository yet — or the API is unreachable (see the message above).') +
+          '</div></td></tr>';
+
+    document.getElementById('count').textContent = VIEW.length + ' of ' + ALL.length + ' shown · ' +
+        money(VIEW.reduce((s, r) => s + total(r), 0)) + ' at stake';
+}
+
+function sortBy(key) {
+    if (sortKey === key) sortDir = -sortDir; else { sortKey = key; sortDir = 1; }
+    render();
+}
+
+// ---------- detail drawer ----------
+function openDetail(id) {
+    selected = ALL.find(r => r.SubmissionId === id) || null;
+    if (!selected) return;
+    render();
+    document.getElementById('drawer').classList.add('open');
+    document.getElementById('scrim').classList.add('open');
+    document.getElementById('dTitle').textContent = selected.CustomerName;
+    document.getElementById('dSub').textContent = selected.SubmissionId + ' · ' + selected.UtilityName + ' · ' + money(total(selected));
+    document.getElementById('zipLink').href = US.authedUrl(API + '/export/' + encodeURIComponent(id) + '/zip');
+    document.getElementById('saveMsg').textContent = '';
+    document.getElementById('dBody').innerHTML = '<div class="empty">Loading case history…</div>';
+
+    fetch(API + '/?action=history&submissionId=' + encodeURIComponent(id))
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) throw new Error(data.error);
+            detail = data;
+            renderDetail();
+        })
+        .catch(err => {
+            detail = null;
+            document.getElementById('dBody').innerHTML =
+                '<div class="banner err">Could not load the full history: ' + esc(err.message) + '</div>';
+        });
+}
+
+function closeDrawer() {
+    document.getElementById('drawer').classList.remove('open');
+    document.getElementById('scrim').classList.remove('open');
+    selected = null; detail = null;
+    render();
+}
+
+function kv(k, v, raw) { return '<dt>' + esc(k) + '</dt><dd>' + (raw ? v : esc(v)) + '</dd>'; }
+
+function field(id, label, type, value, options) {
+    let input;
+    if (type === 'select') {
+        const opts = options.slice();
+        if (value && opts.indexOf(value) === -1) opts.unshift(value);
+        input = '<select id="' + id + '">' + opts.map(o =>
+            '<option' + (o === value ? ' selected' : '') + '>' + esc(o) + '</option>').join('') + '</select>';
+    } else if (type === 'textarea') {
+        input = '<textarea id="' + id + '">' + esc(value) + '</textarea>';
+    } else {
+        input = '<input type="' + type + '" id="' + id + '" value="' + esc(value) + '">';
+    }
+    return '<div class="field"><label for="' + id + '">' + esc(label) + '</label>' + input + '</div>';
+}
+
+function renderDetail() {
+    const s = detail.submission || {};
+    const r = selected;
+    const versions = detail.versions || [];
+    const files = detail.files || [];
+    const events = detail.events || [];
+    const sugg = detail.skillSuggestions || [];
+    const letters = detail.letterFeedback || [];
+
+    const statuses = ['Under Review', 'Submitted to UtiliSave', 'Approved for Filing', 'Submitted to Utility',
+                      'Awaiting Utility Response', 'Adjusted', 'Rejected', 'Under Appeal', 'Closed'];
+
+    let html = '';
+
+    html += '<h3>Management</h3>';
+    html += '<div class="grid2">';
+    html += field('mStatus', 'Status', 'select', r.Status, statuses);
+    html += field('mPriority', 'Priority', 'select', r.Priority || 'Normal', ['High', 'Normal', 'Low']);
+    html += field('mAssigned', 'Assigned to', 'text', r.AssignedTo || '');
+    html += field('mDue', 'Next action date', 'date', r.DueDate ? String(r.DueDate).slice(0, 10) : '');
+    html += field('mCaseId', 'UtiliSave Internal Issue ID', 'text', r.CaseID || '');
+    html += field('mUtilityCaseId', 'Utility Company ID', 'text', r.UtilityCaseID || '');
+    html += '</div>';
+    html += field('mAdminNotes', 'Internal notes (replaces the stored note)', 'textarea', r.AdminNotes || '');
+    html += field('mNote', 'Add a timestamped entry to the audit trail (optional)', 'textarea', '');
+    html += field('mActor', 'Your name (recorded on the trail)', 'text', localStorage.getItem('us_actor') || '');
+
+    html += '<h3>Case facts</h3><dl class="kv">' +
+        kv('Repository ID', r.SubmissionId) +
+        kv('Auditor', s.AuditorName || r.AuditorName) +
+        kv('Account number', s.AccountNumber || r.AccountNumber) +
+        kv('Utility', (s.UtilityName || r.UtilityName) + ' (' + (s.UtilityType || r.UtilityType) + ')') +
+        kv('Issue type', s.IssueType || r.IssueType) +
+        kv('Expected refund', money(s.FinancialImpactRefund !== undefined ? s.FinancialImpactRefund : r.FinancialImpactRefund)) +
+        kv('Expected future savings', money(s.FinancialImpactFuture !== undefined ? s.FinancialImpactFuture : r.FinancialImpactFuture)) +
+        kv('Total at stake', '<strong>' + money(total(r)) + '</strong>', true) +
+        kv('First filed', fmtDateTime(r.CreatedAt)) +
+        kv('Last updated', fmtDateTime(r.UpdatedAt)) +
+        '</dl>';
+
+    html += '<h3>Rounds (' + versions.length + ')</h3>';
+    html += versions.length
+        ? '<div class="timeline">' + versions.map(v =>
+            '<div class="tl"><strong>Round ' + v.VersionNumber + '</strong> ' + statusPill(v.Status) +
+            ' &nbsp;score ' + (v.Score === null || v.Score === undefined ? '—' : v.Score) +
+            '<div class="when">' + fmtDateTime(v.Timestamp) + (v.AuditorName ? ' · ' + esc(v.AuditorName) : '') + '</div>' +
+            (v.OutcomeReason ? '<div style="margin-top:5px; color:#7d211a;">Outcome: ' + esc(v.OutcomeReason) + '</div>' : '') +
+            (v.AuditorNotes ? '<div style="margin-top:4px;">' + esc(v.AuditorNotes) + '</div>' : '') +
+            '</div>').join('') + '</div>'
+        : '<div class="empty">No rounds recorded.</div>';
+
+    html += '<h3>Attachments (' + files.length + ')</h3>';
+    html += files.length
+        ? '<div class="filelist">' + files.map(f =>
+            '<a href="' + US.authedUrl(API + '/files/' + f.FileId) + '" target="_blank" rel="noopener">' + esc(f.FileName) +
+            ' <span class="id">(' + Math.round((f.FileSize || 0) / 1024) + ' KB · ' + esc(f.Category || 'intake') + ' · round ' + f.VersionNumber + ')</span></a>').join('') + '</div>'
+        : '<div class="empty">No files attached.</div>';
+
+    if (s.SubmissionText) html += '<h3>Submission text</h3><div class="prose">' + esc(s.SubmissionText) + '</div>';
+    if (s.AnalysisNotes) html += '<h3>Auditor analysis notes</h3><div class="prose">' + esc(s.AnalysisNotes) + '</div>';
+
+    if (letters.length) {
+        html += '<h3>Final letters and critiques</h3>' + letters.map(l =>
+            '<div style="margin-bottom:12px;"><div class="id">Round ' + l.VersionNumber + ' · ' + fmtDateTime(l.UpdatedAt) + '</div>' +
+            (l.FinalLetterText ? '<div class="prose">' + esc(l.FinalLetterText) + '</div>' : '') +
+            (l.Critique ? '<div class="prose" style="background:#fff8e1; margin-top:6px;">Critique: ' + esc(l.Critique) + '</div>' : '') +
+            '</div>').join('');
+    }
+
+    if (sugg.length) {
+        html += '<h3>Framework suggestions</h3>' + sugg.map(x =>
+            '<div style="margin-bottom:10px; font-size:12.5px;"><span class="pill ' + statusClass(x.Status) + '">' + esc(x.Status) + '</span> ' +
+            '<span class="id">round ' + x.VersionNumber + ' · ' + esc(x.Source) + '</span>' +
+            '<div style="margin-top:4px;">' + esc(x.Suggestion) + '</div></div>').join('');
+    }
+
+    html += '<h3>Audit trail (' + events.length + ')</h3>';
+    html += events.length
+        ? '<div class="timeline">' + events.map(e =>
+            '<div class="tl"><strong>' + esc(e.EventType) + '</strong> <span class="when">' + fmtDateTime(e.CreatedAt) +
+            (e.Actor ? ' · ' + esc(e.Actor) : '') + '</span><div>' + esc(e.Detail || '') + '</div></div>').join('') + '</div>'
+        : '<div class="empty">Nothing recorded yet. Changes you save here appear in this trail.</div>';
+
+    document.getElementById('dBody').innerHTML = html;
+}
+
+// ---------- write ----------
+function saveManagement() {
+    if (!selected) return;
+    const btn = document.getElementById('saveBtn');
+    const msg = document.getElementById('saveMsg');
+    const actor = (document.getElementById('mActor').value || '').trim();
+    if (actor) { try { localStorage.setItem('us_actor', actor); } catch (e) {} }
+
+    const body = {
+        status: document.getElementById('mStatus').value,
+        priority: document.getElementById('mPriority').value,
+        assignedTo: document.getElementById('mAssigned').value,
+        dueDate: document.getElementById('mDue').value || null,
+        caseId: document.getElementById('mCaseId').value,
+        utilityCaseId: document.getElementById('mUtilityCaseId').value,
+        adminNotes: document.getElementById('mAdminNotes').value,
+        note: document.getElementById('mNote').value,
+        actor: actor || 'management'
+    };
+
+    btn.disabled = true;
+    msg.style.color = 'var(--muted)';
+    msg.textContent = 'Saving…';
+
+    const id = selected.SubmissionId;
+    fetch(API + '/submissions/' + encodeURIComponent(id) + '/manage', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+    })
+        .then(r => r.json())
+        .then(res => {
+            if (res.error) throw new Error(res.error);
+            return fetch(API + '/?action=list').then(r => r.json()).then(d => {
+                ALL = d.submissions || [];
+                fillFilterOptions();
+                openDetail(id);
+                const m = document.getElementById('saveMsg');
+                m.style.color = '#1c5c31';
+                m.textContent = 'Saved.';
+            });
+        })
+        .catch(err => {
+            msg.style.color = '#b3261e';
+            msg.textContent = 'Save failed: ' + err.message;
+        })
+        .then(() => { btn.disabled = false; });
+}
+
+function resendNotify() {
+    if (!selected) return;
+    const msg = document.getElementById('saveMsg');
+    msg.style.color = 'var(--muted)';
+    msg.textContent = 'Sending…';
+    fetch(API + '/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ submissionId: selected.SubmissionId })
+    })
+        .then(r => r.json())
+        .then(res => {
+            msg.style.color = res.sent ? '#1c5c31' : '#b3261e';
+            msg.textContent = res.sent ? ('Emailed ' + (res.to || 'management') + '.') : ('Not sent: ' + (res.reason || 'unknown reason'));
+        })
+        .catch(err => { msg.style.color = '#b3261e'; msg.textContent = 'Not sent: ' + err.message; });
+}
+
+// ---------- people & logins ----------
+let USERS = [];
+
+function togglePeople() {
+    const p = document.getElementById('peoplePanel');
+    const showing = p.style.display !== 'none';
+    p.style.display = showing ? 'none' : 'block';
+    if (!showing) { loadUsers(); p.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+}
+
+function setUserMsg(html, kind) {
+    const el = document.getElementById('userMsg');
+    el.style.display = 'block';
+    const palette = { error: ['#fdecea', '#7d211a'], ok: ['#e8f5ec', '#1c5c31'], warn: ['#fff8e1', '#6d5410'] }[kind || 'ok'];
+    el.style.background = palette[0];
+    el.style.color = palette[1];
+    el.innerHTML = html;
+}
+
+function loadUsers() {
+    return fetch(API + '/users')
+        .then(r => r.json())
+        .then(d => {
+            if (d.error) throw new Error(d.error);
+            USERS = d.users || [];
+            renderUsers();
+        })
+        .catch(err => {
+            document.getElementById('userRows').innerHTML =
+                '<tr><td colspan="6"><div class="empty">Could not load the people list: ' + esc(err.message) + '</div></td></tr>';
+        });
+}
+
+function renderUsers() {
+    document.getElementById('userRows').innerHTML = USERS.length ? USERS.map(u =>
+        '<tr>' +
+        '<td>' + esc(u.fullName || '—') + '</td>' +
+        '<td class="id">' + esc(u.email) + '</td>' +
+        '<td><span class="pill ' + (u.role === 'admin' ? 'utility' : 'review') + '">' + (u.role === 'admin' ? 'Administrator' : 'Auditor') + '</span></td>' +
+        '<td>' + (u.active
+            ? (u.mustChangePassword ? '<span class="pill appeal">Invited</span>' : '<span class="pill adjusted">Active</span>')
+            : '<span class="pill closed">Disabled</span>') + '</td>' +
+        '<td class="id">' + (u.lastLoginAt ? fmtDateTime(u.lastLoginAt) : 'never') + '</td>' +
+        '<td style="white-space:nowrap;">' +
+            '<button class="btn-light" style="padding:5px 10px; font-size:11.5px;" onclick="resetUserPassword(' + u.id + ')">Reset password</button> ' +
+            '<button class="btn-light" style="padding:5px 10px; font-size:11.5px;" onclick="setUserRole(' + u.id + ', \'' + (u.role === 'admin' ? 'auditor' : 'admin') + '\')">' +
+                (u.role === 'admin' ? 'Make auditor' : 'Make admin') + '</button> ' +
+            '<button class="btn-light" style="padding:5px 10px; font-size:11.5px;" onclick="setUserActive(' + u.id + ', ' + (u.active ? 'false' : 'true') + ')">' +
+                (u.active ? 'Disable' : 'Re-enable') + '</button>' +
+        '</td></tr>').join('')
+        : '<tr><td colspan="6"><div class="empty">No accounts yet.</div></td></tr>';
+}
+
+// The temporary password is shown on screen as well as emailed, because the
+// email can fail (no key, wrong domain, spam filter) and the person would then
+// be locked out with no way for you to tell them.
+function credentialResult(res, whatHappened) {
+    const mail = res.email || {};
+    const line = mail.sent
+        ? 'Emailed to <strong>' + esc(mail.to || res.user.email) + '</strong>.'
+        : '<strong>The email did not go out</strong> (' + esc(mail.reason || 'unknown reason') + '). Send the password to them yourself.';
+    setUserMsg(
+        whatHappened + ' for <strong>' + esc(res.user.email) + '</strong>.<br>' +
+        'Temporary password: <code style="background:#fff; border:1px solid #d7dee7; padding:3px 8px; border-radius:4px; font-size:14px; letter-spacing:1px;">' + esc(res.tempPassword) + '</code><br>' +
+        line + ' They will be asked to set their own password the first time they sign in.',
+        mail.sent ? 'ok' : 'warn');
+}
+
+// Proves the mail server works without waiting for a real submission, and
+// surfaces the actual SMTP error rather than making you read Railway's logs.
+function testEmail() {
+    const to = prompt('Send a test email to which address?\n\nLeave as-is to use the system default.', 'internalaudit@utilisave.com');
+    if (to === null) return;
+    setUserMsg('Sending a test message…', 'warn');
+    fetch(API + '/admin/test-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: to.trim() })
+    })
+        .then(r => r.json())
+        .then(res => {
+            if (res.error) throw new Error(res.error);
+            if (res.sent) {
+                setUserMsg('Test message accepted by the mail server.<br>'
+                    + 'To: <strong>' + esc(res.to) + '</strong><br>'
+                    + 'From: ' + esc(res.from) + '<br>'
+                    + 'Transport: ' + esc(res.transport)
+                    + '<br><em>Accepted is not the same as delivered — check the inbox, and the spam folder.</em>', 'ok');
+            } else {
+                setUserMsg('<strong>The mail server refused the message.</strong><br>'
+                    + esc(res.reason || 'no reason given')
+                    + '<br>Transport: ' + esc(res.transport) + ' &middot; From: ' + esc(res.from), 'error');
+            }
+        })
+        .catch(err => setUserMsg('Could not run the mail test: ' + esc(err.message), 'error'));
+}
+
+function createUser() {
+    const name = document.getElementById('nuName').value.trim();
+    const email = document.getElementById('nuEmail').value.trim();
+    const role = document.getElementById('nuRole').value;
+    if (!email) { setUserMsg('Enter an email address.', 'error'); return; }
+
+    const btn = document.getElementById('nuBtn');
+    btn.disabled = true; btn.textContent = 'Creating…';
+
+    fetch(API + '/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fullName: name, email: email, role: role })
+    })
+        .then(r => r.json())
+        .then(res => {
+            if (res.error) throw new Error(res.error);
+            document.getElementById('nuName').value = '';
+            document.getElementById('nuEmail').value = '';
+            credentialResult(res, 'Account created');
+            return loadUsers();
+        })
+        .catch(err => setUserMsg('Could not create the account: ' + esc(err.message), 'error'))
+        .then(() => { btn.disabled = false; btn.textContent = 'Create & email login'; });
+}
+
+function resetUserPassword(id) {
+    const u = USERS.find(x => x.id === id);
+    if (!confirm('Reset the password for ' + (u ? u.email : 'this person') + '?\n\nTheir current password stops working immediately and they are signed out everywhere.')) return;
+    fetch(API + '/users/' + id + '/reset-password', { method: 'POST' })
+        .then(r => r.json())
+        .then(res => {
+            if (res.error) throw new Error(res.error);
+            credentialResult(res, 'Password reset');
+            return loadUsers();
+        })
+        .catch(err => setUserMsg('Could not reset the password: ' + esc(err.message), 'error'));
+}
+
+function setUserRole(id, role) {
+    fetch(API + '/users/' + id, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: role })
+    })
+        .then(r => r.json())
+        .then(res => {
+            if (res.error) throw new Error(res.error);
+            setUserMsg('Access level updated for <strong>' + esc(res.user.email) + '</strong>.', 'ok');
+            return loadUsers();
+        })
+        .catch(err => setUserMsg('Could not change the access level: ' + esc(err.message), 'error'));
+}
+
+function setUserActive(id, active) {
+    const u = USERS.find(x => x.id === id);
+    if (!active && !confirm('Disable ' + (u ? u.email : 'this person') + '?\n\nThey are signed out immediately and cannot sign in again until you re-enable them.')) return;
+    fetch(API + '/users/' + id, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ active: active })
+    })
+        .then(r => r.json())
+        .then(res => {
+            if (res.error) throw new Error(res.error);
+            setUserMsg((active ? 'Re-enabled ' : 'Disabled ') + '<strong>' + esc(res.user.email) + '</strong>.', 'ok');
+            return loadUsers();
+        })
+        .catch(err => setUserMsg('Could not update the account: ' + esc(err.message), 'error'));
+}
+
+// ---------- export ----------
+function exportCsv() {
+    const cols = ['SubmissionId', 'CaseID', 'UtilityCaseID', 'CustomerName', 'AccountNumber', 'UtilityName',
+                  'UtilityType', 'IssueType', 'AuditorName', 'FinancialImpactRefund', 'FinancialImpactFuture',
+                  'LatestScore', 'LatestRound', 'Status', 'Priority', 'AssignedTo', 'DueDate',
+                  'VersionCount', 'FileCount', 'CreatedAt', 'UpdatedAt', 'AdminNotes'];
+    const csv = [cols.join(',')].concat(VIEW.map(r =>
+        cols.map(c => '"' + String(r[c] === null || r[c] === undefined ? '' : r[c]).replace(/"/g, '""') + '"').join(','))).join('\r\n');
+
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'utilisave-submissions-' + new Date().toISOString().slice(0, 10) + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}
+
+function openForm() { window.open(FORM_URL, '_blank', 'noopener'); }
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+
+// Deep link: management.html?id=USLLC-... opens straight to that case. The
+// button in the notification email uses exactly this.
+document.addEventListener('us-auth-ready', function start() {
+    const id = new URLSearchParams(location.search).get('id');
+    loadAll().then(() => { if (id) openDetail(id); loadUsers(); });
+    // Quiet background refresh so a console left open stays current, but never
+    // while a case is open for editing (it would clobber unsaved edits).
+    setInterval(() => { if (!selected) loadAll(); }, 120000);
+});
+</script>
+</body>
+</html>
