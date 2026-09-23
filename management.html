@@ -156,6 +156,7 @@
         <button class="btn-ghost" onclick="exportCsv()">Export CSV</button>
         <button class="btn-ghost" onclick="window.print()">Print</button>
         <button class="btn-ghost" onclick="togglePeople()">People &amp; logins</button>
+        <button class="btn-ghost" onclick="toggleOptions()">Dropdown options</button>
         <button class="btn-ghost" onclick="openForm()">Submission form</button>
     </div>
 </div>
@@ -185,6 +186,32 @@
                         <th style="cursor:default;">Last signed in</th><th style="cursor:default;">Actions</th>
                     </tr></thead>
                     <tbody id="userRows"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="panel" id="optionsPanel" style="display:none; margin-bottom:20px;">
+        <div class="filters" style="justify-content:space-between;">
+            <strong style="font-size:14px; color:var(--navy);">Dropdown options</strong>
+            <span style="font-size:12px; color:var(--muted); flex:1;">Utility and Issue Type values added via "Other" on the submission form. Renaming or deleting one only changes the choice offered going forward &mdash; existing submissions keep whatever text they already have on file.</span>
+        </div>
+        <div style="padding:16px;">
+            <div class="grid2" style="grid-template-columns:1fr 1fr auto; align-items:end; gap:10px;">
+                <div class="field" style="margin:0;"><label for="optField">Field</label>
+                    <select id="optField"><option value="utilityName">Utility</option><option value="issueType">Issue Type</option></select>
+                </div>
+                <div class="field" style="margin:0;"><label for="optValue">Value</label><input id="optValue" type="text" placeholder="e.g., National Grid"></div>
+                <button class="btn" id="optBtn" onclick="createOption()" style="height:36px;">Add</button>
+            </div>
+            <div id="optionMsg" style="display:none; margin-top:12px; padding:12px; border-radius:6px; font-size:13px; line-height:1.6;"></div>
+            <div style="margin-top:16px; overflow:auto;">
+                <table>
+                    <thead><tr>
+                        <th style="cursor:default;">Field</th><th style="cursor:default;">Value</th>
+                        <th style="cursor:default;">Added by</th><th style="cursor:default;">Actions</th>
+                    </tr></thead>
+                    <tbody id="optionRows"></tbody>
                 </table>
             </div>
         </div>
@@ -256,6 +283,28 @@ function esc(v) {
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 function num(v) { const n = Number(v); return isNaN(n) ? 0 : n; }
+// The redlined letter comes back as HTML from an AI call — restrict it to
+// <p>/<ins>/<del> (and strip all attributes) before rendering, same as
+// index.html's own sanitizer, so nothing else it might contain ends up live
+// in this page.
+function sanitizeRedlineHtml(htmlStr) {
+    const container = document.createElement('div');
+    container.innerHTML = htmlStr;
+    const allowed = new Set(['P', 'INS', 'DEL']);
+    (function clean(node) {
+        Array.from(node.childNodes).forEach(child => {
+            if (child.nodeType === 1) {
+                if (!allowed.has(child.tagName)) {
+                    child.replaceWith(document.createTextNode(child.textContent));
+                } else {
+                    Array.from(child.attributes).forEach(attr => child.removeAttribute(attr.name));
+                    clean(child);
+                }
+            }
+        });
+    })(container);
+    return container.innerHTML;
+}
 function total(r) { return num(r.FinancialImpactRefund) + num(r.FinancialImpactFuture); }
 function money(v) { return '$' + num(v).toLocaleString('en-US', { maximumFractionDigits: 0 }); }
 function fmtDate(v) {
@@ -521,6 +570,7 @@ function renderDetail() {
     const events = detail.events || [];
     const sugg = detail.skillSuggestions || [];
     const letters = detail.letterFeedback || [];
+    const ai = detail.aiAnalyses || {};
 
     const statuses = ['Under Review', 'Submitted to UtiliSave', 'Approved for Filing', 'Submitted to Utility',
                       'Awaiting Utility Response', 'Adjusted', 'Rejected', 'Under Appeal', 'Closed'];
@@ -534,7 +584,7 @@ function renderDetail() {
     html += field('mAssigned', 'Assigned to', 'text', r.AssignedTo || '');
     html += field('mDue', 'Next action date', 'date', r.DueDate ? String(r.DueDate).slice(0, 10) : '');
     html += field('mCaseId', 'UtiliSave Internal Issue ID', 'text', r.CaseID || '');
-    html += field('mUtilityCaseId', 'Utility Company ID', 'text', r.UtilityCaseID || '');
+    html += field('mUtilityCaseId', 'Utility Case ID', 'text', r.UtilityCaseID || '');
     html += '</div>';
     html += field('mAdminNotes', 'Internal notes (replaces the stored note)', 'textarea', r.AdminNotes || '');
     html += field('mNote', 'Add a timestamped entry to the audit trail (optional)', 'textarea', '');
@@ -572,7 +622,7 @@ function renderDetail() {
         : '<div class="empty">No files attached.</div>';
 
     if (s.SubmissionText) html += '<h3>Submission text</h3><div class="prose">' + esc(s.SubmissionText) + '</div>';
-    if (s.AnalysisNotes) html += '<h3>Auditor analysis notes</h3><div class="prose">' + esc(s.AnalysisNotes) + '</div>';
+    if (s.AnalysisNotes) html += '<h3>Auditor instructions &amp; additional information</h3><div class="prose">' + esc(s.AnalysisNotes) + '</div>';
 
     if (letters.length) {
         html += '<h3>Final letters and critiques</h3>' + letters.map(l =>
@@ -580,6 +630,43 @@ function renderDetail() {
             (l.FinalLetterText ? '<div class="prose">' + esc(l.FinalLetterText) + '</div>' : '') +
             (l.Critique ? '<div class="prose" style="background:#fff8e1; margin-top:6px;">Critique: ' + esc(l.Critique) + '</div>' : '') +
             '</div>').join('');
+    }
+
+    if (ai.score_gap || ai.research_checklist || ai.redline_letter) {
+        html += '<h3>AI-generated analysis</h3>';
+
+        if (ai.score_gap) {
+            const c = ai.score_gap.content || {};
+            html += '<div class="prose" style="margin-bottom:10px;"><strong>Why this isn\'t scoring 80+:</strong><br>' + esc(c.whyNot80 || '') + '</div>';
+            if (c.gapReasoning) html += '<div class="prose" style="margin-bottom:10px;"><strong>Gap reasoning:</strong><br>' + esc(c.gapReasoning) + '</div>';
+            if ((c.furtherResearch || []).length) {
+                html += '<div class="prose" style="margin-bottom:10px;"><strong>Further research needed:</strong><ul style="margin:6px 0 0 18px;">' +
+                    c.furtherResearch.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul></div>';
+            }
+        }
+
+        if (ai.research_checklist) {
+            const c = ai.research_checklist.content || {};
+            const items = (c.tariffCitations || []).map(x => esc(x.citation) + (x.relevance ? ' — ' + esc(x.relevance) : ''))
+                .concat((c.pscCases || []).map(x => esc(x.caseName) + (x.takeaway ? ' — ' + esc(x.takeaway) : '') + (x.url ? ' (' + esc(x.url) + ')' : '')))
+                .concat((c.stateRelief || []).map(x => esc(x.suggestion) + (x.basis ? ' — ' + esc(x.basis) : '')))
+                .concat((c.other || []).map(x => esc(x.suggestion) + (x.basis ? ' — ' + esc(x.basis) : '')));
+            if (items.length) {
+                html += '<div class="prose" style="margin-bottom:10px;"><strong>Research checklist:</strong><ul style="margin:6px 0 0 18px;">' +
+                    items.map(x => '<li>' + x + '</li>').join('') + '</ul></div>';
+            }
+        }
+
+        if (ai.redline_letter) {
+            const c = ai.redline_letter.content || {};
+            if (c.letterHtml) {
+                html += '<div class="prose" style="margin-bottom:6px;"><strong>Redlined letter:</strong><div style="margin-top:6px;">' + sanitizeRedlineHtml(c.letterHtml) + '</div></div>';
+            }
+            if ((c.changeSummary || []).length) {
+                html += '<div class="prose" style="margin-bottom:10px;"><strong>Changes made:</strong><ul style="margin:6px 0 0 18px;">' +
+                    c.changeSummary.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul></div>';
+            }
+        }
     }
 
     if (sugg.length) {
@@ -832,6 +919,110 @@ function setUserActive(id, active) {
             return loadUsers();
         })
         .catch(err => setUserMsg('Could not update the account: ' + esc(err.message), 'error'));
+}
+
+// ---------- dropdown options (Utility, Issue Type) ----------
+let OPTIONS = [];
+const OPTION_FIELD_LABEL = { utilityName: 'Utility', issueType: 'Issue Type' };
+
+function toggleOptions() {
+    const p = document.getElementById('optionsPanel');
+    const showing = p.style.display !== 'none';
+    p.style.display = showing ? 'none' : 'block';
+    if (!showing) { loadOptions(); p.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+}
+
+function setOptionMsg(html, kind) {
+    const el = document.getElementById('optionMsg');
+    el.style.display = 'block';
+    const palette = { error: ['#fdecea', '#7d211a'], ok: ['#e8f5ec', '#1c5c31'] }[kind || 'ok'];
+    el.style.background = palette[0];
+    el.style.color = palette[1];
+    el.innerHTML = html;
+}
+
+function loadOptions() {
+    return fetch(API + '/admin/options')
+        .then(r => r.json())
+        .then(d => {
+            if (d.error) throw new Error(d.error);
+            OPTIONS = d.options || [];
+            renderOptions();
+        })
+        .catch(err => {
+            document.getElementById('optionRows').innerHTML =
+                '<tr><td colspan="4"><div class="empty">Could not load dropdown options: ' + esc(err.message) + '</div></td></tr>';
+        });
+}
+
+function renderOptions() {
+    document.getElementById('optionRows').innerHTML = OPTIONS.length ? OPTIONS.map(o =>
+        '<tr>' +
+        '<td><span class="pill review">' + esc(OPTION_FIELD_LABEL[o.FieldName] || o.FieldName) + '</span></td>' +
+        '<td>' + esc(o.Value) + '</td>' +
+        '<td class="id">' + esc(o.AddedBy || '—') + '</td>' +
+        '<td style="white-space:nowrap;">' +
+            '<button class="btn-light" style="padding:5px 10px; font-size:11.5px;" onclick="renameOption(' + o.Id + ')">Rename</button> ' +
+            '<button class="btn-light" style="padding:5px 10px; font-size:11.5px;" onclick="deleteOption(' + o.Id + ')">Delete</button>' +
+        '</td></tr>').join('')
+        : '<tr><td colspan="4"><div class="empty">No custom values added yet &mdash; they show up here as soon as an auditor uses "Other" on the form.</div></td></tr>';
+}
+
+function createOption() {
+    const field = document.getElementById('optField').value;
+    const value = document.getElementById('optValue').value.trim();
+    if (!value) { setOptionMsg('Enter a value.', 'error'); return; }
+
+    const btn = document.getElementById('optBtn');
+    btn.disabled = true; btn.textContent = 'Adding…';
+
+    fetch(API + '/options', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ field: field, value: value, addedBy: 'admin console' })
+    })
+        .then(r => r.json())
+        .then(res => {
+            if (res.error) throw new Error(res.error);
+            document.getElementById('optValue').value = '';
+            setOptionMsg('Added <strong>' + esc(value) + '</strong> to ' + esc(OPTION_FIELD_LABEL[field] || field) + '.', 'ok');
+            return loadOptions();
+        })
+        .catch(err => setOptionMsg('Could not add that value: ' + esc(err.message), 'error'))
+        .then(() => { btn.disabled = false; btn.textContent = 'Add'; });
+}
+
+function renameOption(id) {
+    const o = OPTIONS.find(x => x.Id === id);
+    const next = prompt('Rename this value:', o ? o.Value : '');
+    if (next === null) return;
+    const value = next.trim();
+    if (!value) { setOptionMsg('Value cannot be blank.', 'error'); return; }
+    fetch(API + '/options/' + id, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value: value })
+    })
+        .then(r => r.json())
+        .then(res => {
+            if (res.error) throw new Error(res.error);
+            setOptionMsg('Renamed to <strong>' + esc(value) + '</strong>. Existing submissions keep the old text.', 'ok');
+            return loadOptions();
+        })
+        .catch(err => setOptionMsg('Could not rename that value: ' + esc(err.message), 'error'));
+}
+
+function deleteOption(id) {
+    const o = OPTIONS.find(x => x.Id === id);
+    if (!confirm('Remove "' + (o ? o.Value : 'this value') + '" from the dropdown?\n\nExisting submissions that already used it are unaffected.')) return;
+    fetch(API + '/options/' + id, { method: 'DELETE' })
+        .then(r => r.json())
+        .then(res => {
+            if (res.error) throw new Error(res.error);
+            setOptionMsg('Removed.', 'ok');
+            return loadOptions();
+        })
+        .catch(err => setOptionMsg('Could not remove that value: ' + esc(err.message), 'error'));
 }
 
 // ---------- export ----------

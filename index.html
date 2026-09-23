@@ -598,10 +598,10 @@
                         <label>
                             <span class="label-with-tooltip">
                                 Auditor Name <span class="required">*</span>
-                                <span class="tooltip" data-tooltip="Your name or ID for tracking purposes">?</span>
+                                <span class="tooltip" data-tooltip="Filled in automatically from your signed-in account. Only people who were sent a login by an administrator can appear here.">?</span>
                             </span>
                         </label>
-                        <input type="text" id="auditorName" placeholder="e.g., Matthew Sands" required>
+                        <input type="text" id="auditorName" placeholder="Signing you in..." required readonly style="background:#f3f4f6; cursor:not-allowed;">
                     </div>
 
                     <div class="form-group">
@@ -654,14 +654,9 @@
                             <option value="">Select type...</option>
                             <option value="Electric">Electric</option>
                             <option value="Gas">Gas</option>
-                            <option value="Water">Water</option>
-                            <option value="Sewer">Sewer</option>
+                            <option value="Water and Sewer">Water and Sewer</option>
                             <option value="Steam">Steam</option>
-                            <option value="Other">Other</option>
                         </select>
-                        <div id="utilityTypeOtherWrap" style="display:none; margin-top:8px;">
-                            <input type="text" id="utilityTypeOther" placeholder="Type the correct service type, then click Add">
-                        </div>
                     </div>
 
                     <div class="form-group">
@@ -716,7 +711,7 @@
                     <div class="form-group">
                         <label>
                             <span class="label-with-tooltip">
-                                Utility Company ID <span style="font-weight:400; color:#888;">(if any)</span>
+                                Utility Case ID <span style="font-weight:400; color:#888;">(if any)</span>
                                 <span class="tooltip" data-tooltip="The utility's own case, claim, or reference number for this dispute, if they have already given you one. Optional.">?</span>
                             </span>
                         </label>
@@ -766,11 +761,11 @@
                 <div class="form-group">
                     <label>
                         <span class="label-with-tooltip">
-                            Notes for This Analysis
-                            <span class="tooltip" data-tooltip="Thoughts, questions, or issues you want specifically addressed when this case is reviewed. Saved with this submission only.">?</span>
+                            Instructions &amp; Additional Information
+                            <span class="tooltip" data-tooltip="Anything you want considered or acted on for this specific case: instructions, direction, context, open questions, things to double-check. Saved with this submission only.">?</span>
                         </span>
                     </label>
-                    <textarea id="analysisNotes" placeholder="e.g., Double-check the SC9 rate period math — utility may argue the meter was reclassified before the dispute window..."></textarea>
+                    <textarea id="analysisNotes" placeholder="e.g., Double-check the SC9 rate period math — utility may argue the meter was reclassified before the dispute window. Also, hold this one until I confirm the account number with the customer..."></textarea>
                 </div>
 
                 <div class="form-group">
@@ -1106,7 +1101,6 @@
         }
 
         setupOtherField('utilityName');
-        setupOtherField('utilityType');
         setupOtherField('issueType');
         loadCustomOptions();
 
@@ -1785,7 +1779,7 @@
                 'Utility: ' + d.utilityName + ' (' + d.utilityType + ')',
                 'Issue Type: ' + d.issueType,
                 'UtiliSave Internal Issue ID: ' + (d.caseId || '(not assigned)'),
-                'Utility Company ID: ' + (d.utilityCaseId || '(none)'),
+                'Utility Case ID: ' + (d.utilityCaseId || '(none)'),
                 'Submission Date: ' + d.submissionDate,
                 'Expected Refund: $' + (d.financialImpactRefund || '0'),
                 'Expected Future Savings: $' + (d.financialImpactFuture || '0'),
@@ -2082,7 +2076,11 @@
             const latestVersion = (currentHistoryData.versions && currentHistoryData.versions[0]) || null;
             const nextRound = (latestVersion ? latestVersion.VersionNumber : 1) + 1;
 
-            document.getElementById('auditorName').value = sub.AuditorName || '';
+            // Deliberately NOT sub.AuditorName: the auditor field is locked to
+            // whoever is signed in right now, not whoever filed the earlier
+            // round being reopened — a case can pass between auditors, but
+            // each round is attributed to the person actually working it (and
+            // the server rejects a save where these don't match).
             document.getElementById('customerName').value = sub.CustomerName || '';
             document.getElementById('accountNumber').value = sub.AccountNumber || '';
             addCustomOption('utilityName', sub.UtilityName || '', { persist: false });
@@ -2239,8 +2237,6 @@
             document.getElementById('utilityNameOtherWrap').style.display = 'none';
             document.getElementById('issueTypeOther').value = '';
             document.getElementById('issueTypeOtherWrap').style.display = 'none';
-            document.getElementById('utilityTypeOther').value = '';
-            document.getElementById('utilityTypeOtherWrap').style.display = 'none';
             document.getElementById('resultsContainer').style.display = 'none';
             document.getElementById('submissionDate').valueAsDate = new Date();
             document.getElementById('repoStatus').style.display = 'none';
