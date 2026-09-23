@@ -530,12 +530,56 @@ function openDetail(id) {
             if (data.error) throw new Error(data.error);
             detail = data;
             renderDetail();
+            ensureAiAnalyses(id);
         })
         .catch(err => {
             detail = null;
             document.getElementById('dBody').innerHTML =
                 '<div class="banner err">Could not load the full history: ' + esc(err.message) + '</div>';
         });
+}
+
+// A case should always have an AI-drafted letter and score-gap explanation to
+// review here, not just when an auditor happened to click "Generate" on the
+// submission form first. If either is missing from the cached ai_analyses,
+// generate it now in the background — the redline-letter prompt already
+// drafts a complete original letter from the case facts when there's no
+// submission text to redline, so this always produces something, never a
+// blank tab. Re-renders the drawer in place once each one comes back, and
+// bails out quietly if the admin has since closed or switched cases.
+function ensureAiAnalyses(id) {
+    const ai = (detail && detail.aiAnalyses) || {};
+    const jobs = [];
+    if (!ai.score_gap) jobs.push({ path: '/analyze/score-gap', kind: 'score_gap' });
+    if (!ai.redline_letter) jobs.push({ path: '/analyze/redline-letter', kind: 'redline_letter' });
+    if (!jobs.length) return;
+
+    jobs.forEach(job => {
+        if (!detail.aiAnalyses) detail.aiAnalyses = {};
+        detail.aiAnalyses[job.kind] = { generating: true };
+        if (selected && selected.SubmissionId === id) renderDetail();
+
+        fetch(API + job.path, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ submissionId: id })
+        })
+            .then(r => r.json())
+            .then(res => {
+                if (!selected || selected.SubmissionId !== id || !detail) return; // moved on to another case
+                if (res.error) {
+                    detail.aiAnalyses[job.kind] = { error: res.error };
+                } else {
+                    detail.aiAnalyses[job.kind] = { content: res, generatedAt: res.generatedAt };
+                }
+                renderDetail();
+            })
+            .catch(err => {
+                if (!selected || selected.SubmissionId !== id || !detail) return;
+                detail.aiAnalyses[job.kind] = { error: err.message };
+                renderDetail();
+            });
+    });
 }
 
 function closeDrawer() {
@@ -605,13 +649,38 @@ function renderDetail() {
 
     html += '<h3>Rounds (' + versions.length + ')</h3>';
     html += versions.length
-        ? '<div class="timeline">' + versions.map(v =>
-            '<div class="tl"><strong>Round ' + v.VersionNumber + '</strong> ' + statusPill(v.Status) +
-            ' &nbsp;score ' + (v.Score === null || v.Score === undefined ? '—' : v.Score) +
-            '<div class="when">' + fmtDateTime(v.Timestamp) + (v.AuditorName ? ' · ' + esc(v.AuditorName) : '') + '</div>' +
-            (v.OutcomeReason ? '<div style="margin-top:5px; color:#7d211a;">Outcome: ' + esc(v.OutcomeReason) + '</div>' : '') +
-            (v.AuditorNotes ? '<div style="margin-top:4px;">' + esc(v.AuditorNotes) + '</div>' : '') +
-            '</div>').join('') + '</div>'
+        ? '<div class="timeline">' + versions.map(v => {
+            const breakdown = v.ScoreBreakdown || [];
+            const issues = v.Issues || [];
+            const suggestions = v.Suggestions || [];
+            let block = '<div class="tl"><strong>Round ' + v.VersionNumber + '</strong> ' + statusPill(v.Status) +
+                ' &nbsp;score ' + (v.Score === null || v.Score === undefined ? '—' : v.Score) +
+                '<div class="when">' + fmtDateTime(v.Timestamp) + (v.AuditorName ? ' · ' + esc(v.AuditorName) : '') + '</div>' +
+                (v.OutcomeReason ? '<div style="margin-top:5px; color:#7d211a;">Outcome: ' + esc(v.OutcomeReason) + '</div>' : '') +
+                (v.AuditorNotes ? '<div style="margin-top:4px;">' + esc(v.AuditorNotes) + '</div>' : '');
+
+            if (breakdown.length) {
+                block += '<div style="margin-top:8px; font-size:12px;"><strong>Score breakdown:</strong><table style="margin-top:4px; width:100%; font-size:12px;">' +
+                    breakdown.map(b => '<tr><td style="padding:2px 8px 2px 0; color:#333;">' + esc(b.title) + '</td>' +
+                        '<td style="padding:2px 8px; color:#666;">' + esc(b.score) + ' ' + esc(b.status) + '</td>' +
+                        '<td style="padding:2px 0; color:#888;">' + esc(b.description) + '</td></tr>').join('') +
+                    '</table></div>';
+            }
+            if (issues.length) {
+                block += '<div style="margin-top:8px; font-size:12px;"><strong>Issues flagged:</strong><ul style="margin:4px 0 0 18px;">' +
+                    issues.map(x => '<li><span class="pill ' + (String(x.type).toUpperCase() === 'CRITICAL' ? 'rejected' : 'appeal') + '">' + esc(x.type) + '</span> ' +
+                        esc(x.title) + ' — ' + esc(x.description) + (x.impact ? ' <em>(' + esc(x.impact) + ')</em>' : '') + '</li>').join('') +
+                    '</ul></div>';
+            }
+            if (suggestions.length) {
+                block += '<div style="margin-top:8px; font-size:12px;"><strong>Suggestions:</strong><ul style="margin:4px 0 0 18px;">' +
+                    suggestions.map(x => '<li>' + esc(x.title) + ' — ' + esc(x.description) +
+                        (x.example ? '<br><em>Example: ' + esc(x.example) + '</em>' : '') +
+                        (x.impact ? ' <span style="color:#1c5c31;">(' + esc(x.impact) + ')</span>' : '') + '</li>').join('') +
+                    '</ul></div>';
+            }
+            return block + '</div>';
+        }).join('') + '</div>'
         : '<div class="empty">No rounds recorded.</div>';
 
     html += '<h3>Attachments (' + files.length + ')</h3>';
@@ -636,16 +705,22 @@ function renderDetail() {
         html += '<h3>AI-generated analysis</h3>';
 
         if (ai.score_gap) {
-            const c = ai.score_gap.content || {};
-            html += '<div class="prose" style="margin-bottom:10px;"><strong>Why this isn\'t scoring 80+:</strong><br>' + esc(c.whyNot80 || '') + '</div>';
-            if (c.gapReasoning) html += '<div class="prose" style="margin-bottom:10px;"><strong>Gap reasoning:</strong><br>' + esc(c.gapReasoning) + '</div>';
-            if ((c.furtherResearch || []).length) {
-                html += '<div class="prose" style="margin-bottom:10px;"><strong>Further research needed:</strong><ul style="margin:6px 0 0 18px;">' +
-                    c.furtherResearch.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul></div>';
+            if (ai.score_gap.generating) {
+                html += '<div class="prose" style="margin-bottom:10px; color:#666;"><em>Generating the score-gap explanation…</em></div>';
+            } else if (ai.score_gap.error) {
+                html += '<div class="banner err" style="margin-bottom:10px;">Could not generate score-gap explanation: ' + esc(ai.score_gap.error) + '</div>';
+            } else {
+                const c = ai.score_gap.content || {};
+                html += '<div class="prose" style="margin-bottom:10px;"><strong>Why this isn\'t scoring 80+:</strong><br>' + esc(c.whyNot80 || '') + '</div>';
+                if (c.gapReasoning) html += '<div class="prose" style="margin-bottom:10px;"><strong>Gap reasoning:</strong><br>' + esc(c.gapReasoning) + '</div>';
+                if ((c.furtherResearch || []).length) {
+                    html += '<div class="prose" style="margin-bottom:10px;"><strong>Further research needed:</strong><ul style="margin:6px 0 0 18px;">' +
+                        c.furtherResearch.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul></div>';
+                }
             }
         }
 
-        if (ai.research_checklist) {
+        if (ai.research_checklist && !ai.research_checklist.generating && !ai.research_checklist.error) {
             const c = ai.research_checklist.content || {};
             const items = (c.tariffCitations || []).map(x => esc(x.citation) + (x.relevance ? ' — ' + esc(x.relevance) : ''))
                 .concat((c.pscCases || []).map(x => esc(x.caseName) + (x.takeaway ? ' — ' + esc(x.takeaway) : '') + (x.url ? ' (' + esc(x.url) + ')' : '')))
@@ -658,13 +733,19 @@ function renderDetail() {
         }
 
         if (ai.redline_letter) {
-            const c = ai.redline_letter.content || {};
-            if (c.letterHtml) {
-                html += '<div class="prose" style="margin-bottom:6px;"><strong>Redlined letter:</strong><div style="margin-top:6px;">' + sanitizeRedlineHtml(c.letterHtml) + '</div></div>';
-            }
-            if ((c.changeSummary || []).length) {
-                html += '<div class="prose" style="margin-bottom:10px;"><strong>Changes made:</strong><ul style="margin:6px 0 0 18px;">' +
-                    c.changeSummary.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul></div>';
+            if (ai.redline_letter.generating) {
+                html += '<div class="prose" style="margin-bottom:10px; color:#666;"><em>Drafting the redlined letter…</em></div>';
+            } else if (ai.redline_letter.error) {
+                html += '<div class="banner err" style="margin-bottom:10px;">Could not generate a letter: ' + esc(ai.redline_letter.error) + '</div>';
+            } else {
+                const c = ai.redline_letter.content || {};
+                if (c.letterHtml) {
+                    html += '<div class="prose" style="margin-bottom:6px;"><strong>Redlined letter:</strong><div style="margin-top:6px;">' + sanitizeRedlineHtml(c.letterHtml) + '</div></div>';
+                }
+                if ((c.changeSummary || []).length) {
+                    html += '<div class="prose" style="margin-bottom:10px;"><strong>Changes made:</strong><ul style="margin:6px 0 0 18px;">' +
+                        c.changeSummary.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul></div>';
+                }
             }
         }
     }
