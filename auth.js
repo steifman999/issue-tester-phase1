@@ -31,6 +31,24 @@
     var realFetch = window.fetch.bind(window);
 
     var state = { token: null, user: null };
+
+    // ?signin=<email> comes from the link in an invite or password-reset
+    // email. It means "this link is for THAT person": always open on the
+    // sign-in screen for that account, never on whatever session this browser
+    // already holds (often the administrator who sent the invite). The
+    // parameter is removed from the address bar straight away so a bookmark
+    // or a refresh does not keep forcing the sign-in screen.
+    var SIGNIN_FOR = null;
+    try {
+        var params = new URLSearchParams(location.search);
+        var wanted = (params.get('signin') || '').trim().toLowerCase();
+        if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(wanted)) SIGNIN_FOR = wanted;
+        if (params.has('signin')) {
+            params.delete('signin');
+            var rest = params.toString();
+            history.replaceState(null, '', location.pathname + (rest ? '?' + rest : '') + location.hash);
+        }
+    } catch (e) { SIGNIN_FOR = null; }
     try { state.token = localStorage.getItem(TOKEN_KEY); } catch (e) { state.token = null; }
 
     // ---- public surface -----------------------------------------------------
@@ -145,7 +163,7 @@
         m.textContent = text || '';
     }
 
-    function showLogin(message) {
+    function showLogin(message, prefillEmail) {
         hidePage();
         ensureGate();
         gate.style.display = 'flex';
@@ -163,7 +181,12 @@
             '<div class="us-foot">Forgot your password? Ask an administrator to reset it &mdash; you will get a new one by email.</div>';
         if (message) setMsg('info', message);
         el('us-form').addEventListener('submit', doLogin);
-        el('us-email').focus();
+        if (prefillEmail) {
+            el('us-email').value = prefillEmail;   // .value, never HTML
+            el('us-pw').focus();
+        } else {
+            el('us-email').focus();
+        }
     }
 
     function doLogin(e) {
@@ -356,7 +379,41 @@
     }
 
     // ---- boot ---------------------------------------------------------------
+    var INVITE_MSG = 'Enter the temporary password from your email. You will then choose your own password.';
+
+    // Signs out whoever this browser is signed in as, then shows the sign-in
+    // screen for the account the email link was sent to.
+    function signInAsInvitee(previousEmail) {
+        var t = state.token;
+        clearToken();
+        var chip = el('us-chip');
+        if (chip) chip.remove();
+        var msg = previousEmail
+            ? 'This link is for ' + SIGNIN_FOR + '. ' + previousEmail + ' has been signed out on this browser. ' + INVITE_MSG
+            : INVITE_MSG;
+        if (t) {
+            realFetch(API + '/auth/logout', { method: 'POST', headers: { 'Authorization': 'Bearer ' + t } })
+                .catch(function () {})
+                .then(function () { showLogin(msg, SIGNIN_FOR); });
+        } else {
+            showLogin(msg, SIGNIN_FOR);
+        }
+    }
+
     function boot() {
+        if (SIGNIN_FOR) {
+            if (!state.token) { showLogin(INVITE_MSG, SIGNIN_FOR); return; }
+            // Already signed in: continue only if it is the very account the
+            // link was sent to; otherwise sign that session out first.
+            loadMe()
+                .then(function (user) {
+                    if (String(user.email || '').toLowerCase() !== SIGNIN_FOR) { signInAsInvitee(user.email); return; }
+                    if (user.mustChangePassword) { showChangePassword(false); return; }
+                    admit();
+                })
+                .catch(function () { clearToken(); showLogin(INVITE_MSG, SIGNIN_FOR); });
+            return;
+        }
         if (!state.token) { showLogin(); return; }
         loadMe()
             .then(function (user) {

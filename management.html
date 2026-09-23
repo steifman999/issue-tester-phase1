@@ -136,6 +136,22 @@
     .savebar { background: #fff; border-top: 1px solid var(--line); padding: 12px 22px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
     .savemsg { font-size: 12px; }
     .confid { font-size: 11px; color: var(--muted); margin-top: 22px; text-align: center; }
+    .modal-scrim { position: fixed; inset: 0; background: rgba(10,35,66,.45); display: none; z-index: 60; }
+    .modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); width: min(760px, 96vw); max-height: 92vh;
+             background: #fff; border-radius: 10px; z-index: 70; display: none; flex-direction: column; box-shadow: 0 10px 40px rgba(10,35,66,.3); }
+    .modal.open, .modal-scrim.open { display: flex; }
+    .modal .mhead { padding: 14px 20px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    .modal .mhead h2 { margin: 0; font-size: 16px; color: var(--navy); }
+    .modal .mbody { padding: 16px 20px; overflow-y: auto; }
+    .modal .mfoot { padding: 12px 20px; border-top: 1px solid var(--line); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .modal textarea { min-height: 170px; }
+    .hint { font-size: 11.5px; color: var(--muted); line-height: 1.5; }
+    .hint code { background: #eef2f7; padding: 1px 5px; border-radius: 3px; font-size: 11px; cursor: pointer; }
+    .preview-frame { width: 100%; height: 360px; border: 1px solid var(--line); border-radius: 6px; background: #fff; margin-top: 10px; }
+    .mailok { color: #1c5c31; font-size: 11.5px; }
+    .mailbad { color: #b3261e; font-size: 11.5px; }
+    .doclink { color: var(--navy); font-weight: 600; text-decoration: none; white-space: nowrap; }
+    .doclink:hover { text-decoration: underline; }
     @media print {
         .topbar .actions, .filters, .scrim, .drawer, .savebar { display: none !important; }
         body { background: #fff; }
@@ -168,6 +184,8 @@
         <div class="filters" style="justify-content:space-between;">
             <strong style="font-size:14px; color:var(--navy);">People &amp; logins</strong>
             <span style="font-size:12px; color:var(--muted); flex:1;">Everyone who can sign in. Auditors get the submission form only; administrators also get this console.</span>
+            <button class="btn-light" onclick="openComposer({ mode: 'template' })">Invite message</button>
+            <button class="btn-light" onclick="toggleEmailLog()">Email log</button>
             <button class="btn-light" onclick="testEmail()">Send test email</button>
         </div>
         <div style="padding:16px;">
@@ -175,7 +193,10 @@
                 <div class="field" style="margin:0;"><label for="nuName">Full name</label><input id="nuName" type="text" placeholder="Matthew Sands"></div>
                 <div class="field" style="margin:0;"><label for="nuEmail">Email</label><input id="nuEmail" type="email" placeholder="msands@utilisave.com"></div>
                 <div class="field" style="margin:0;"><label for="nuRole">Access</label><select id="nuRole"><option value="auditor">Auditor</option><option value="admin">Administrator</option></select></div>
-                <button class="btn" id="nuBtn" onclick="createUser()" style="height:36px;">Create &amp; email login</button>
+                <div style="display:flex; gap:6px;">
+                    <button class="btn" id="nuBtn" onclick="createUser()" style="height:36px;">Create &amp; email login</button>
+                    <button class="btn-light" onclick="customizeNewInvite()" style="height:36px;" title="Edit the message before it is sent">Customize message&hellip;</button>
+                </div>
             </div>
             <div id="userMsg" style="display:none; margin-top:12px; padding:12px; border-radius:6px; font-size:13px; line-height:1.6;"></div>
             <div style="margin-top:16px; overflow:auto;">
@@ -183,10 +204,27 @@
                     <thead><tr>
                         <th style="cursor:default;">Name</th><th style="cursor:default;">Email</th>
                         <th style="cursor:default;">Access</th><th style="cursor:default;">State</th>
+                        <th style="cursor:default;">Invite / last email</th>
                         <th style="cursor:default;">Last signed in</th><th style="cursor:default;">Actions</th>
                     </tr></thead>
                     <tbody id="userRows"></tbody>
                 </table>
+            </div>
+            <div id="emailLogWrap" style="display:none; margin-top:18px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:6px;">
+                    <strong style="font-size:13px; color:var(--navy);">Email log</strong>
+                    <span class="hint" style="flex:1;">Every email the system has tried to send, and what the mail server answered. &ldquo;Accepted&rdquo; means your mail server took the message; if it still never arrives, it was lost after that point (spam or quarantine, or a mistyped address).</span>
+                    <button class="btn-light" style="padding:5px 10px; font-size:11.5px;" onclick="loadEmailLog()">Refresh</button>
+                </div>
+                <div style="overflow:auto; max-height:360px;">
+                    <table>
+                        <thead><tr>
+                            <th style="cursor:default;">When</th><th style="cursor:default;">Type</th><th style="cursor:default;">To</th>
+                            <th style="cursor:default;">Subject</th><th style="cursor:default;">Result</th>
+                        </tr></thead>
+                        <tbody id="emailLogRows"></tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
@@ -258,8 +296,42 @@
     <div class="savebar">
         <button class="btn" id="saveBtn" onclick="saveManagement()">Save changes</button>
         <button class="btn-light" onclick="resendNotify()">Re-send email</button>
+        <a id="docsLink" class="btn-light" style="text-decoration:none; padding:8px 16px; display:inline-block;" href="#" target="_blank" rel="noopener">Documents &amp; history</a>
         <a id="zipLink" class="btn-light" style="text-decoration:none; padding:8px 16px; display:inline-block;" href="#" target="_blank" rel="noopener">Download case ZIP</a>
         <span class="savemsg" id="saveMsg"></span>
+    </div>
+</div>
+
+<div class="modal-scrim" id="composerScrim" onclick="closeComposer()"></div>
+<div class="modal" id="composer" role="dialog" aria-modal="true" aria-labelledby="cTitle">
+    <div class="mhead">
+        <div><h2 id="cTitle">Invite message</h2><div class="hint" id="cSub"></div></div>
+        <button class="btn-light" onclick="closeComposer()">Close</button>
+    </div>
+    <div class="mbody">
+        <div class="field"><label for="cSubject">Subject</label><input id="cSubject" type="text" maxlength="200"></div>
+        <div class="field"><label for="cMessage">Message</label><textarea id="cMessage" maxlength="5000"></textarea></div>
+        <div class="hint">
+            Placeholders are filled in for each person &mdash; click one to insert it:
+            <code onclick="insertPlaceholder('{firstName}')">{firstName}</code>
+            <code onclick="insertPlaceholder('{name}')">{name}</code>
+            <code onclick="insertPlaceholder('{email}')">{email}</code>
+            <code onclick="insertPlaceholder('{role}')">{role}</code>
+            <code onclick="insertPlaceholder('{signInLink}')">{signInLink}</code>
+            <code onclick="insertPlaceholder('{sender}')">{sender}</code><br>
+            The sign-in link, their email, the temporary password and their access level are always added below your message automatically, so they cannot be left out by mistake.
+        </div>
+        <label id="cSaveWrap" style="display:flex; gap:8px; align-items:center; margin-top:12px; font-size:12.5px;">
+            <input type="checkbox" id="cSaveDefault"> Also save this as the default invite message
+        </label>
+        <iframe id="cPreview" class="preview-frame" style="display:none;" sandbox="" title="Email preview"></iframe>
+        <div id="cMsg" style="display:none; margin-top:12px; padding:10px 12px; border-radius:6px; font-size:12.5px; line-height:1.6;"></div>
+    </div>
+    <div class="mfoot">
+        <button class="btn" id="cSend" onclick="composerPrimary()">Send</button>
+        <button class="btn-light" onclick="previewComposer()">Preview</button>
+        <button class="btn-light" id="cRestore" onclick="restoreDefaultTemplate()">Restore default</button>
+        <span class="hint" id="cFoot"></span>
     </div>
 </div>
 
@@ -305,6 +377,7 @@ function sanitizeRedlineHtml(htmlStr) {
     })(container);
     return container.innerHTML;
 }
+function docsUrl(id) { return 'documents.html?id=' + encodeURIComponent(id); }
 function total(r) { return num(r.FinancialImpactRefund) + num(r.FinancialImpactFuture); }
 function money(v) { return '$' + num(v).toLocaleString('en-US', { maximumFractionDigits: 0 }); }
 function fmtDate(v) {
@@ -357,6 +430,7 @@ const COLUMNS = [
     { key: 'Priority',     label: 'Priority',    render: r => '<span class="pri ' + esc(r.Priority || 'Normal') + '">' + esc(r.Priority || 'Normal') + '</span>' },
     { key: 'AssignedTo',   label: 'Owner',       render: r => esc(r.AssignedTo || '—') },
     { key: 'DueDate',      label: 'Next date',   render: r => dueCell(r.DueDate) },
+    { key: 'FileCount',    label: 'Docs',        render: r => '<a class="doclink" href="' + docsUrl(r.SubmissionId) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="All documents filed on this case, and their history">&#128196; ' + (r.FileCount || 0) + '</a>' },
     { key: 'UpdatedAt',    label: 'Updated',     cls: 'num', render: r => '<span class="id">' + fmtDate(r.UpdatedAt) + '</span>' }
 ];
 
@@ -521,6 +595,7 @@ function openDetail(id) {
     document.getElementById('dTitle').textContent = selected.CustomerName;
     document.getElementById('dSub').textContent = selected.SubmissionId + ' · ' + selected.UtilityName + ' · ' + money(total(selected));
     document.getElementById('zipLink').href = US.authedUrl(API + '/export/' + encodeURIComponent(id) + '/zip');
+    document.getElementById('docsLink').href = docsUrl(id);
     document.getElementById('saveMsg').textContent = '';
     document.getElementById('dBody').innerHTML = '<div class="empty">Loading case history…</div>';
 
@@ -683,11 +758,11 @@ function renderDetail() {
         }).join('') + '</div>'
         : '<div class="empty">No rounds recorded.</div>';
 
-    html += '<h3>Attachments (' + files.length + ')</h3>';
+    html += '<h3>Attachments (' + files.length + ') &nbsp;<a class="doclink" style="text-transform:none; letter-spacing:0; font-size:12px;" href="' + docsUrl(r.SubmissionId) + '" target="_blank" rel="noopener">Open all documents &amp; history &rarr;</a></h3>';
     html += files.length
         ? '<div class="filelist">' + files.map(f =>
             '<a href="' + US.authedUrl(API + '/files/' + f.FileId) + '" target="_blank" rel="noopener">' + esc(f.FileName) +
-            ' <span class="id">(' + Math.round((f.FileSize || 0) / 1024) + ' KB · ' + esc(f.Category || 'intake') + ' · round ' + f.VersionNumber + ')</span></a>').join('') + '</div>'
+            ' <span class="id">(' + Math.max(1, Math.round((f.FileSize || 0) / 1024)) + ' KB · ' + esc(f.Category || 'intake') + ' · round ' + f.VersionNumber + (f.UploadedBy ? ' · ' + esc(f.UploadedBy) : '') + ')</span></a>').join('') + '</div>'
         : '<div class="empty">No files attached.</div>';
 
     if (s.SubmissionText) html += '<h3>Submission text</h3><div class="prose">' + esc(s.SubmissionText) + '</div>';
@@ -760,7 +835,7 @@ function renderDetail() {
     html += '<h3>Audit trail (' + events.length + ')</h3>';
     html += events.length
         ? '<div class="timeline">' + events.map(e =>
-            '<div class="tl"><strong>' + esc(e.EventType) + '</strong> <span class="when">' + fmtDateTime(e.CreatedAt) +
+            '<div class="tl"><strong>' + esc(({ document_added: 'Document added', document_removed: 'Document removed' })[e.EventType] || e.EventType) + '</strong> <span class="when">' + fmtDateTime(e.CreatedAt) +
             (e.Actor ? ' · ' + esc(e.Actor) : '') + '</span><div>' + esc(e.Detail || '') + '</div></div>').join('') + '</div>'
         : '<div class="empty">Nothing recorded yet. Changes you save here appear in this trail.</div>';
 
@@ -863,43 +938,239 @@ function loadUsers() {
         })
         .catch(err => {
             document.getElementById('userRows').innerHTML =
-                '<tr><td colspan="6"><div class="empty">Could not load the people list: ' + esc(err.message) + '</div></td></tr>';
+                '<tr><td colspan="7"><div class="empty">Could not load the people list: ' + esc(err.message) + '</div></td></tr>';
         });
 }
 
+function mailStatusLine(e) {
+    if (!e) return '<span class="hint">no email recorded</span>';
+    const what = { invite: 'Invite', invite_resend: 'Invite (resent)', password_reset: 'Password reset' }[e.kind] || e.kind;
+    return e.sent
+        ? '<span class="mailok" title="' + esc(e.serverResponse || '') + '">&#10003; ' + esc(what) + ' accepted by mail server · ' + fmtDateTime(e.at) + '</span>'
+        : '<span class="mailbad" title="' + esc(e.reason || '') + '">&#10007; ' + esc(what) + ' NOT sent · ' + fmtDateTime(e.at) + '<br>' + esc(e.reason || 'unknown reason') + '</span>';
+}
+
 function renderUsers() {
-    document.getElementById('userRows').innerHTML = USERS.length ? USERS.map(u =>
-        '<tr>' +
+    const btn = (label, onclick, extra) => '<button class="btn-light" style="padding:5px 10px; font-size:11.5px;' + (extra || '') + '" onclick="' + onclick + '">' + label + '</button> ';
+    document.getElementById('userRows').innerHTML = USERS.length ? USERS.map(u => {
+        const invited = u.active && u.mustChangePassword;
+        const inviteInfo = (u.inviteCount ? ('Invited ' + (u.inviteCount > 1 ? u.inviteCount + '× · last ' : '') + fmtDateTime(u.invitedAt)) : '') ;
+        return '<tr>' +
         '<td>' + esc(u.fullName || '—') + '</td>' +
         '<td class="id">' + esc(u.email) + '</td>' +
         '<td><span class="pill ' + (u.role === 'admin' ? 'utility' : 'review') + '">' + (u.role === 'admin' ? 'Administrator' : 'Auditor') + '</span></td>' +
         '<td>' + (u.active
             ? (u.mustChangePassword ? '<span class="pill appeal">Invited</span>' : '<span class="pill adjusted">Active</span>')
             : '<span class="pill closed">Disabled</span>') + '</td>' +
+        '<td style="min-width:210px;">' + (inviteInfo ? '<div class="hint">' + esc(inviteInfo) + '</div>' : '') + mailStatusLine(u.lastEmail) + '</td>' +
         '<td class="id">' + (u.lastLoginAt ? fmtDateTime(u.lastLoginAt) : 'never') + '</td>' +
         '<td style="white-space:nowrap;">' +
-            '<button class="btn-light" style="padding:5px 10px; font-size:11.5px;" onclick="resetUserPassword(' + u.id + ')">Reset password</button> ' +
-            '<button class="btn-light" style="padding:5px 10px; font-size:11.5px;" onclick="setUserRole(' + u.id + ', \'' + (u.role === 'admin' ? 'auditor' : 'admin') + '\')">' +
-                (u.role === 'admin' ? 'Make auditor' : 'Make admin') + '</button> ' +
-            '<button class="btn-light" style="padding:5px 10px; font-size:11.5px;" onclick="setUserActive(' + u.id + ', ' + (u.active ? 'false' : 'true') + ')">' +
-                (u.active ? 'Disable' : 'Re-enable') + '</button>' +
-        '</td></tr>').join('')
-        : '<tr><td colspan="6"><div class="empty">No accounts yet.</div></td></tr>';
+            (invited ? btn('Resend invite', 'openComposer({ mode: \'resend\', userId: ' + u.id + ' })', ' border-color:var(--navy); font-weight:600;') : '') +
+            btn('Reset password', 'resetUserPassword(' + u.id + ')') +
+            btn(u.role === 'admin' ? 'Make auditor' : 'Make admin', 'setUserRole(' + u.id + ', \'' + (u.role === 'admin' ? 'auditor' : 'admin') + '\')') +
+            btn(u.active ? 'Disable' : 'Re-enable', 'setUserActive(' + u.id + ', ' + (u.active ? 'false' : 'true') + ')') +
+        '</td></tr>';
+    }).join('')
+        : '<tr><td colspan="7"><div class="empty">No accounts yet.</div></td></tr>';
 }
 
 // The temporary password is shown on screen as well as emailed, because the
-// email can fail (no key, wrong domain, spam filter) and the person would then
-// be locked out with no way for you to tell them.
+// email can fail (wrong address, server refusal, spam filter) and the person
+// would then be locked out with no way for you to tell them.
 function credentialResult(res, whatHappened) {
     const mail = res.email || {};
     const line = mail.sent
-        ? 'Emailed to <strong>' + esc(mail.to || res.user.email) + '</strong>.'
-        : '<strong>The email did not go out</strong> (' + esc(mail.reason || 'unknown reason') + '). Send the password to them yourself.';
+        ? 'Your mail server <strong>accepted</strong> the email for <strong>' + esc(mail.to || res.user.email) + '</strong>. ' +
+          'If they cannot find it, ask them to check spam/junk, then use <em>Resend invite</em> &mdash; or give them the password above yourself.'
+        : '<strong>The email did not go out</strong> (' + esc(mail.reason || 'unknown reason') + '). Send the password to them yourself, or fix the cause and use Resend invite.';
     setUserMsg(
         whatHappened + ' for <strong>' + esc(res.user.email) + '</strong>.<br>' +
         'Temporary password: <code style="background:#fff; border:1px solid #d7dee7; padding:3px 8px; border-radius:4px; font-size:14px; letter-spacing:1px;">' + esc(res.tempPassword) + '</code><br>' +
         line + ' They will be asked to set their own password the first time they sign in.',
         mail.sent ? 'ok' : 'warn');
+    if (document.getElementById('emailLogWrap').style.display !== 'none') loadEmailLog();
+}
+
+// ---------- invite composer (new invite, resend, or the saved default) ----------
+let COMPOSER = null;   // { mode: 'create'|'resend'|'template', userId?, person? }
+let TEMPLATE = null;
+
+function loadTemplate() {
+    return fetch(API + '/admin/invite-template').then(r => r.json()).then(t => {
+        if (t.error) throw new Error(t.error);
+        TEMPLATE = t;
+        return t;
+    });
+}
+
+function setComposerMsg(html, kind) {
+    const el = document.getElementById('cMsg');
+    if (!html) { el.style.display = 'none'; return; }
+    const palette = { error: ['#fdecea', '#7d211a'], ok: ['#e8f5ec', '#1c5c31'], warn: ['#fff8e1', '#6d5410'] }[kind || 'ok'];
+    el.style.display = 'block'; el.style.background = palette[0]; el.style.color = palette[1];
+    el.innerHTML = html;
+}
+
+function openComposer(opts) {
+    COMPOSER = Object.assign({}, opts);
+    const u = COMPOSER.userId ? USERS.find(x => x.id === COMPOSER.userId) : null;
+    COMPOSER.person = u || COMPOSER.person || null;
+    const title = { template: 'Default invite message', create: 'New invite', resend: 'Resend invite' }[COMPOSER.mode];
+    document.getElementById('cTitle').textContent = title;
+    document.getElementById('cSub').textContent =
+        COMPOSER.mode === 'template' ? 'Used for every new invite and resend unless you change it for one person.'
+        : 'To ' + ((COMPOSER.person && (COMPOSER.person.fullName || COMPOSER.person.name)) || '') + ' <' + (COMPOSER.person && COMPOSER.person.email || '') + '>';
+    document.getElementById('cSend').textContent = COMPOSER.mode === 'template' ? 'Save default'
+        : COMPOSER.mode === 'resend' ? 'Resend invite' : 'Create & send invite';
+    document.getElementById('cSaveWrap').style.display = COMPOSER.mode === 'template' ? 'none' : 'flex';
+    document.getElementById('cRestore').style.display = COMPOSER.mode === 'template' ? '' : 'none';
+    document.getElementById('cSaveDefault').checked = false;
+    document.getElementById('cPreview').style.display = 'none';
+    document.getElementById('cFoot').textContent = COMPOSER.mode === 'resend'
+        ? 'A new temporary password is issued; the one in the earlier email stops working.' : '';
+    setComposerMsg('');
+    document.getElementById('cSubject').value = '';
+    document.getElementById('cMessage').value = 'Loading…';
+    document.getElementById('composer').classList.add('open');
+    document.getElementById('composerScrim').classList.add('open');
+    loadTemplate().then(t => {
+        document.getElementById('cSubject').value = t.subject;
+        document.getElementById('cMessage').value = t.message;
+        if (COMPOSER.mode === 'template') {
+            document.getElementById('cFoot').textContent = t.isDefault ? 'Currently the built-in default.'
+                : 'Last saved by ' + (t.updatedBy || 'an administrator') + ' · ' + fmtDateTime(t.updatedAt);
+        }
+        document.getElementById('cMessage').focus();
+    }).catch(err => setComposerMsg('Could not load the saved message: ' + esc(err.message), 'error'));
+}
+
+function closeComposer() {
+    document.getElementById('composer').classList.remove('open');
+    document.getElementById('composerScrim').classList.remove('open');
+    COMPOSER = null;
+}
+
+function insertPlaceholder(tok) {
+    const ta = document.getElementById('cMessage');
+    const a = ta.selectionStart || 0, b = ta.selectionEnd || 0;
+    ta.value = ta.value.slice(0, a) + tok + ta.value.slice(b);
+    ta.focus(); ta.selectionStart = ta.selectionEnd = a + tok.length;
+}
+
+function composerBody() {
+    return { subject: document.getElementById('cSubject').value, message: document.getElementById('cMessage').value };
+}
+
+function previewComposer() {
+    if (!COMPOSER) return;
+    const body = composerBody();
+    if (COMPOSER.userId) body.userId = COMPOSER.userId;
+    if (COMPOSER.person && !COMPOSER.userId) { body.fullName = COMPOSER.person.fullName; body.email = COMPOSER.person.email; body.role = COMPOSER.person.role; }
+    fetch(API + '/admin/invite-preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+        .then(r => r.json())
+        .then(p => {
+            if (p.error) throw new Error(p.error);
+            const f = document.getElementById('cPreview');
+            f.style.display = 'block';
+            f.srcdoc = '<div style="font:12px Segoe UI,Arial,sans-serif;color:#666;padding:10px 14px;border-bottom:1px solid #e3e8ee;">To: ' +
+                esc(p.to) + '<br>Subject: <strong style="color:#111;">' + esc(p.subject) + '</strong></div><div style="padding:14px;">' + p.html + '</div>';
+        })
+        .catch(err => setComposerMsg('Could not build the preview: ' + esc(err.message), 'error'));
+}
+
+function saveTemplate(body) {
+    return fetch(API + '/admin/invite-template', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+        .then(r => r.json()).then(t => { if (t.error) throw new Error(t.error); TEMPLATE = t; return t; });
+}
+
+function restoreDefaultTemplate() {
+    if (!confirm('Replace the saved invite message with the built-in default?')) return;
+    saveTemplate({ reset: true }).then(t => {
+        document.getElementById('cSubject').value = t.subject;
+        document.getElementById('cMessage').value = t.message;
+        document.getElementById('cFoot').textContent = 'Currently the built-in default.';
+        setComposerMsg('Restored the built-in default.', 'ok');
+    }).catch(err => setComposerMsg('Could not restore: ' + esc(err.message), 'error'));
+}
+
+function composerPrimary() {
+    if (!COMPOSER) return;
+    const body = composerBody();
+    if (!body.message.trim()) { setComposerMsg('The message cannot be empty.', 'error'); return; }
+    const btn = document.getElementById('cSend');
+    btn.disabled = true;
+    const done = () => { btn.disabled = false; };
+    const saveFirst = (COMPOSER.mode !== 'template' && document.getElementById('cSaveDefault').checked)
+        ? saveTemplate(body) : Promise.resolve();
+
+    if (COMPOSER.mode === 'template') {
+        saveTemplate(body).then(() => { setComposerMsg('Saved. Every new invite and resend now uses this message.', 'ok'); })
+            .catch(err => setComposerMsg('Could not save: ' + esc(err.message), 'error')).then(done);
+        return;
+    }
+
+    let req;
+    if (COMPOSER.mode === 'resend') {
+        const u = COMPOSER.person;
+        if (!confirm('Resend the invite to ' + (u ? u.email : 'this person') + '?\n\nA new temporary password is issued and the one in the earlier email stops working.')) { done(); return; }
+        req = () => fetch(API + '/users/' + COMPOSER.userId + '/resend-invite', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    } else {
+        const p = COMPOSER.person;
+        req = () => fetch(API + '/users', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(Object.assign({ fullName: p.fullName, email: p.email, role: p.role }, body)) });
+    }
+    const mode = COMPOSER.mode;
+    saveFirst.then(req).then(r => r.json())
+        .then(res => {
+            if (res.error) throw new Error(res.error);
+            closeComposer();
+            if (mode === 'create') { document.getElementById('nuName').value = ''; document.getElementById('nuEmail').value = ''; }
+            credentialResult(res, mode === 'resend' ? 'Invite re-sent' : 'Account created');
+            return loadUsers();
+        })
+        .catch(err => setComposerMsg((mode === 'resend' ? 'Could not resend: ' : 'Could not create the account: ') + esc(err.message), 'error'))
+        .then(done);
+}
+
+function customizeNewInvite() {
+    const fullName = document.getElementById('nuName').value.trim();
+    const email = document.getElementById('nuEmail').value.trim();
+    const role = document.getElementById('nuRole').value;
+    if (!fullName || !email) { setUserMsg('Enter the full name and email first, then customize the message.', 'error'); return; }
+    openComposer({ mode: 'create', person: { fullName, email, role } });
+}
+
+// ---------- email log ----------
+function toggleEmailLog() {
+    const w = document.getElementById('emailLogWrap');
+    const show = w.style.display === 'none';
+    w.style.display = show ? 'block' : 'none';
+    if (show) { loadEmailLog(); w.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+}
+
+function loadEmailLog() {
+    const kinds = { invite: 'Invite', invite_resend: 'Invite resent', password_reset: 'Password reset', submission_alert: 'Submission alert', test: 'Test' };
+    fetch(API + '/admin/email-log?limit=100')
+        .then(r => r.json())
+        .then(d => {
+            if (d.error) throw new Error(d.error);
+            const rows = d.entries || [];
+            document.getElementById('emailLogRows').innerHTML = rows.length ? rows.map(e =>
+                '<tr style="cursor:default;"><td class="id" style="white-space:nowrap;">' + fmtDateTime(e.at) + '</td>' +
+                '<td>' + esc(kinds[e.kind] || e.kind) + '</td>' +
+                '<td class="id">' + esc(e.to) + '</td>' +
+                '<td style="font-size:12px;">' + esc(e.subject || '') + '</td>' +
+                '<td>' + (e.sent
+                    ? '<span class="mailok">&#10003; Accepted</span><div class="id">' + esc(e.serverResponse || '') + '</div>'
+                    : '<span class="mailbad">&#10007; Not sent</span><div class="mailbad">' + esc(e.reason || '') + '</div>') +
+                '</td></tr>').join('')
+                : '<tr><td colspan="5"><div class="empty">Nothing sent yet. (Only sends from this update onward are recorded.)</div></td></tr>';
+        })
+        .catch(err => {
+            document.getElementById('emailLogRows').innerHTML = '<tr><td colspan="5"><div class="empty">Could not load the email log: ' + esc(err.message) + '</div></td></tr>';
+        });
 }
 
 // Proves the mail server works without waiting for a real submission, and
@@ -947,13 +1218,18 @@ function createUser() {
     })
         .then(r => r.json())
         .then(res => {
-            if (res.error) throw new Error(res.error);
+            if (res.error) { const e = new Error(res.error); e.existingUserId = res.existingUserId; throw e; }
             document.getElementById('nuName').value = '';
             document.getElementById('nuEmail').value = '';
             credentialResult(res, 'Account created');
             return loadUsers();
         })
-        .catch(err => setUserMsg('Could not create the account: ' + esc(err.message), 'error'))
+        .catch(err => {
+            const u = err.existingUserId && USERS.find(x => x.id === err.existingUserId);
+            const offer = (u && u.active && u.mustChangePassword)
+                ? ' <button class="btn-light" style="padding:4px 10px; font-size:12px;" onclick="openComposer({ mode: \'resend\', userId: ' + u.id + ' })">Resend invite now</button>' : '';
+            setUserMsg('Could not create the account: ' + esc(err.message) + offer, 'error');
+        })
         .then(() => { btn.disabled = false; btn.textContent = 'Create & email login'; });
 }
 
@@ -1126,7 +1402,7 @@ function exportCsv() {
 
 function openForm() { window.open(FORM_URL, '_blank', 'noopener'); }
 
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { if (COMPOSER) closeComposer(); else closeDrawer(); } });
 
 // Deep link: management.html?id=USLLC-... opens straight to that case. The
 // button in the notification email uses exactly this.

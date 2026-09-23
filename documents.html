@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Sign-in gate. Administrators only: this page includes removed documents. -->
+    <script src="auth.js" data-require="admin"></script>
+<title>Case Documents &amp; History — UtiliSave</title>
+<style>
+    :root {
+        --navy: #0B3E76; --navy-dark: #0A2342; --gold: #C8A14B;
+        --line: #e3e8ee; --ink: #1a2129; --muted: #6b7785; --bg: #f4f6f9;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink);
+           font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif; font-size: 14px; line-height: 1.5; }
+    .topbar { background: linear-gradient(135deg, var(--navy-dark), var(--navy)); color: #fff; padding: 20px 28px;
+              display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+    .topbar h1 { margin: 0; font-size: 21px; font-weight: 600; letter-spacing: -0.3px; }
+    .topbar .sub { font-size: 12px; opacity: .85; margin-top: 3px; }
+    .topbar .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .btn-ghost { background: rgba(255,255,255,.12); color: #fff; border: 1px solid rgba(255,255,255,.3); border-radius: 6px;
+                 padding: 8px 14px; font: inherit; font-size: 13px; text-decoration: none; cursor: pointer; }
+    .btn-ghost:hover { background: rgba(255,255,255,.22); }
+    .wrap { padding: 22px 28px 60px; max-width: 1180px; }
+    .panel { background: #fff; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 18px; }
+    .panel > h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .6px; color: var(--navy); margin: 0;
+                  padding: 13px 18px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .panel > h2 .tools { text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--muted); font-size: 12.5px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+    .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px 20px; padding: 16px 18px; }
+    .facts dt { font-size: 11px; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); }
+    .facts dd { margin: 2px 0 0; font-weight: 600; }
+    .round { border-top: 1px solid var(--line); }
+    .round:first-of-type { border-top: 0; }
+    .round .rhead { padding: 12px 18px; background: #fafbfd; display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+    .round .rhead strong { color: var(--navy); }
+    .round .rhead .meta { color: var(--muted); font-size: 12px; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    .round { overflow-x: auto; }
+    .panel > h2 > span { min-width: 0; overflow-wrap: anywhere; }
+    th, td { padding: 9px 18px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; font-size: 13px; }
+    th { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); font-weight: 600; }
+    tr.removed td { color: #8a95a1; }
+    tr.removed td.name a { text-decoration: line-through; color: #8a95a1; }
+    td.name a { color: var(--navy); font-weight: 600; text-decoration: none; word-break: break-word; }
+    td.name a:hover { text-decoration: underline; }
+    .id { font-family: Consolas, 'SF Mono', Menlo, monospace; font-size: 11.5px; color: var(--muted); }
+    .pill { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+    .pill.cur { background: #e8f5ec; color: #1c5c31; }
+    .pill.rem { background: #fdecea; color: #9b2620; }
+    .pill.cat { background: #e6eefc; color: #1a4a8f; }
+    .pill.cat.final_letter { background: #ede7f6; color: #4527a0; }
+    .pill.cat.outcome_letter { background: #fff3cd; color: #7a5c00; }
+    .timeline { border-left: 2px solid var(--line); margin: 16px 18px 18px 26px; padding-left: 20px; }
+    .tl { position: relative; margin-bottom: 14px; font-size: 13px; }
+    .tl:before { content: ''; position: absolute; left: -26px; top: 5px; width: 10px; height: 10px; border-radius: 50%; background: var(--navy); }
+    .tl.document_removed:before { background: #b3261e; }
+    .tl.round_filed:before { background: var(--gold); }
+    .tl .when { color: var(--muted); font-size: 11.5px; }
+    .tl .legacy { font-size: 11px; color: #a67102; }
+    .empty { padding: 30px 18px; text-align: center; color: var(--muted); font-size: 13px; }
+    .banner { padding: 13px 18px; border-radius: 8px; margin-bottom: 18px; font-size: 13px; background: #fdecea; border: 1px solid #f5c2bd; color: #7d211a; }
+    .record a { color: var(--navy); font-weight: 600; }
+    .record li { margin-bottom: 6px; font-size: 13px; }
+    input[type=search], select { font: inherit; font-size: 12.5px; padding: 6px 9px; border: 1px solid var(--line); border-radius: 6px; }
+    .confid { font-size: 11px; color: var(--muted); margin-top: 22px; text-align: center; }
+    @media (max-width: 720px) {
+        .wrap { padding: 16px; }
+        .topbar { padding: 16px; }
+        .facts { grid-template-columns: 1fr 1fr; }
+        table { table-layout: auto; }
+        col.c-size, col.c-added { width: auto !important; }
+        th:nth-child(3), td:nth-child(3), th:nth-child(4), td:nth-child(4) { display: none; }
+        th, td { padding: 8px 10px; }
+    }
+    @media print { .topbar .actions, .tools { display: none !important; } body { background: #fff; } }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+    <div>
+        <h1 id="title">Case documents &amp; history</h1>
+        <div class="sub" id="subtitle">Loading&hellip;</div>
+    </div>
+    <div class="actions">
+        <a class="btn-ghost" id="backLink" href="management.html">&larr; Back to console</a>
+        <a class="btn-ghost" id="zipLink" href="#" target="_blank" rel="noopener">Download case ZIP</a>
+        <button class="btn-ghost" onclick="window.print()">Print</button>
+    </div>
+</div>
+
+<div class="wrap">
+    <div id="banner"></div>
+
+    <div class="panel"><h2>Case</h2><dl class="facts" id="facts"></dl></div>
+
+    <div class="panel">
+        <h2>
+            <span>Documents filed on this case <span id="docCount" class="id"></span></span>
+            <span class="tools">
+                <input type="search" id="q" placeholder="Filter by file name…" oninput="renderDocs()">
+                <select id="fCat" onchange="renderDocs()">
+                    <option value="">All types</option>
+                    <option value="intake">Intake documents</option>
+                    <option value="final_letter">Final letters as submitted</option>
+                    <option value="outcome_letter">Utility outcome letters</option>
+                </select>
+                <label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" id="showRemoved" checked onchange="renderDocs()"> Show removed</label>
+            </span>
+        </h2>
+        <div id="docs"><div class="empty">Loading&hellip;</div></div>
+    </div>
+
+    <div class="panel">
+        <h2>Case record (generated and written content)</h2>
+        <div id="record" class="record" style="padding:14px 18px;"></div>
+    </div>
+
+    <div class="panel">
+        <h2><span>Document history</span><span class="tools">Oldest first &middot; every document added or removed, and every round saved</span></h2>
+        <div id="history"><div class="empty">Loading&hellip;</div></div>
+    </div>
+
+    <div class="confid">Private and confidential UtiliSave work product. Do not disseminate.</div>
+</div>
+
+<script>
+const API = window.US_API;
+const ID = new URLSearchParams(location.search).get('id') || '';
+let DATA = null;
+
+function esc(v) {
+    return String(v === null || v === undefined ? '' : v)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function fmtDateTime(v) {
+    if (!v) return '—';
+    const d = new Date(v);
+    return isNaN(d) ? esc(v) : d.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+function kb(n) { const k = (n || 0) / 1024; return k >= 1024 ? (k / 1024).toFixed(1) + ' MB' : Math.max(1, Math.round(k)) + ' KB'; }
+function fileUrl(id) { return US.authedUrl(API + '/files/' + id); }
+
+function renderFacts() {
+    const s = DATA.submission;
+    document.getElementById('title').textContent = s.CustomerName + ' — documents & history';
+    document.getElementById('subtitle').textContent = s.SubmissionId + ' · ' + s.UtilityName + (s.CaseID ? ' · ' + s.CaseID : '');
+    document.title = s.CustomerName + ' — Case Documents';
+    const f = [
+        ['Customer', s.CustomerName], ['Account', s.AccountNumber],
+        ['Utility', s.UtilityName + (s.UtilityType ? ' (' + s.UtilityType + ')' : '')], ['Issue type', s.IssueType],
+        ['UtiliSave Internal Issue ID', s.CaseID || '—'], ['Utility Case ID', s.UtilityCaseID || '—'],
+        ['Auditor', s.AuditorName], ['Status', s.Status],
+        ['First filed', fmtDateTime(s.CreatedAt)], ['Rounds', String(DATA.rounds.length || 1)]
+    ];
+    document.getElementById('facts').innerHTML = f.map(([k, v]) => '<div><dt>' + esc(k) + '</dt><dd>' + esc(v) + '</dd></div>').join('');
+}
+
+function renderDocs() {
+    const q = document.getElementById('q').value.trim().toLowerCase();
+    const cat = document.getElementById('fCat').value;
+    const showRemoved = document.getElementById('showRemoved').checked;
+    const all = DATA.documents;
+    const current = all.filter(d => !d.Removed).length;
+    document.getElementById('docCount').textContent = '(' + current + ' current' + (all.length > current ? ', ' + (all.length - current) + ' removed' : '') + ')';
+
+    const docs = all.filter(d => (showRemoved || !d.Removed) && (!cat || d.Category === cat) && (!q || d.FileName.toLowerCase().indexOf(q) !== -1));
+
+    const roundNums = Array.from(new Set(DATA.rounds.map(r => r.VersionNumber).concat(all.map(d => d.VersionNumber)))).sort((a, b) => a - b);
+    if (!roundNums.length) roundNums.push(1);
+
+    const html = roundNums.map(n => {
+        const r = DATA.rounds.find(x => x.VersionNumber === n) || {};
+        const rows = docs.filter(d => d.VersionNumber === n);
+        const head = '<div class="rhead"><strong>Round ' + n + (n === 1 ? ' — initial filing' : '') + '</strong>' +
+            '<span class="meta">' + (r.CreatedAt ? fmtDateTime(r.CreatedAt) : '') + (r.AuditorName ? ' · ' + esc(r.AuditorName) : '') +
+            (r.Status ? ' · ' + esc(r.Status) : '') + (r.Score !== null && r.Score !== undefined ? ' · score ' + esc(r.Score) : '') + '</span>' +
+            (r.OutcomeReason ? '<span class="meta" style="color:#7d211a;">Outcome: ' + esc(r.OutcomeReason) + '</span>' : '') + '</div>';
+        const body = rows.length
+            ? '<table><colgroup><col style="width:34%"><col style="width:20%"><col class="c-size" style="width:9%"><col class="c-added" style="width:19%"><col style="width:18%"></colgroup><thead><tr><th>Document</th><th>Type</th><th>Size</th><th>Added</th><th>Status</th></tr></thead><tbody>' +
+              rows.map(d => '<tr class="' + (d.Removed ? 'removed' : '') + '">' +
+                '<td class="name"><a href="' + fileUrl(d.FileId) + '" target="_blank" rel="noopener">' + esc(d.FileName) + '</a><div class="id">#' + d.FileId + '</div></td>' +
+                '<td><span class="pill cat ' + esc(d.Category) + '">' + esc(d.CategoryLabel) + '</span></td>' +
+                '<td class="id">' + kb(d.FileSize) + '</td>' +
+                '<td>' + fmtDateTime(d.UploadedAt) + '<div class="id">' + (d.UploadedBy ? esc(d.UploadedBy) : 'uploader not recorded') + '</div></td>' +
+                '<td>' + (d.Removed
+                    ? '<span class="pill rem">Removed</span><div class="id">' + fmtDateTime(d.RemovedAt) + (d.RemovedBy ? ' · ' + esc(d.RemovedBy) : '') + '</div>'
+                    : '<span class="pill cur">In case file</span>') + '</td></tr>').join('') +
+              '</tbody></table>'
+            : '<div class="empty" style="padding:14px 18px; text-align:left;">No documents ' + (q || cat || !showRemoved ? 'match these filters ' : '') + 'in this round.</div>';
+        return '<div class="round">' + head + body + '</div>';
+    }).join('');
+    document.getElementById('docs').innerHTML = html;
+}
+
+function renderRecord() {
+    const s = DATA.submission;
+    const items = [];
+    items.push(s.HasSubmissionText
+        ? '<li>Submission text as filed by the auditor — <a href="management.html?id=' + encodeURIComponent(s.SubmissionId) + '">open in the console</a></li>'
+        : '<li style="color:var(--muted);">No submission text was entered on the form.</li>');
+    DATA.letters.forEach(l => {
+        if (l.HasText || l.HasCritique) items.push('<li>Round ' + l.VersionNumber + ': ' +
+            [l.HasText ? 'final letter text as submitted' : '', l.HasCritique ? 'auditor critique of the AI draft' : ''].filter(Boolean).join(' and ') +
+            ' <span class="id">(' + fmtDateTime(l.UpdatedAt) + ')</span> — <a href="management.html?id=' + encodeURIComponent(s.SubmissionId) + '">view in the console</a></li>');
+    });
+    if (DATA.redlineLetterAt) items.push('<li>AI-drafted redlined letter <span class="id">(' + fmtDateTime(DATA.redlineLetterAt) + ')</span> — <a href="' +
+        US.authedUrl(API + '/analyze/redline-letter/' + encodeURIComponent(s.SubmissionId) + '/docx') + '" target="_blank" rel="noopener">download as Word</a></li>');
+    document.getElementById('record').innerHTML = '<ul style="margin:0; padding-left:18px;">' + items.join('') + '</ul>';
+}
+
+function renderHistory() {
+    const h = DATA.history;
+    const label = { document_added: 'Document added', document_removed: 'Document removed', round_filed: 'Round saved' };
+    document.getElementById('history').innerHTML = h.length
+        ? '<div class="timeline">' + h.map(e =>
+            '<div class="tl ' + esc(e.type) + '"><strong>' + esc(label[e.type] || e.type) + '</strong> ' +
+            '<span class="when">' + fmtDateTime(e.at) + (e.actor ? ' · ' + esc(e.actor) : '') + '</span>' +
+            '<div>' + esc(e.detail) + '</div>' +
+            (e.legacy ? '<div class="legacy">From the file record — this document was attached before per-document tracking began, so who attached it was not recorded.</div>' : '') +
+            '</div>').join('') + '</div>'
+        : '<div class="empty">No history recorded yet.</div>';
+}
+
+function load() {
+    if (!ID) {
+        document.getElementById('banner').innerHTML = '<div class="banner">No case selected. Open this page from a case in the management console.</div>';
+        return;
+    }
+    document.getElementById('backLink').href = 'management.html?id=' + encodeURIComponent(ID);
+    document.getElementById('zipLink').href = US.authedUrl(API + '/export/' + encodeURIComponent(ID) + '/zip');
+    fetch(API + '/submissions/' + encodeURIComponent(ID) + '/documents')
+        .then(r => (!/json/.test(r.headers.get('content-type') || ''))
+            ? Promise.reject(new Error('the API does not have this feature yet (HTTP ' + r.status + ') — redeploy the updated server.js'))
+            : r.json())
+        .then(d => {
+            if (d.error) throw new Error(d.error);
+            DATA = d;
+            renderFacts(); renderDocs(); renderRecord(); renderHistory();
+        })
+        .catch(err => {
+            document.getElementById('subtitle').textContent = ID;
+            document.getElementById('banner').innerHTML = '<div class="banner">Could not load this case: ' + esc(err.message) + '</div>';
+            ['docs', 'history'].forEach(x => document.getElementById(x).innerHTML = '');
+        });
+}
+
+document.addEventListener('us-auth-ready', load);
+</script>
+</body>
+</html>
