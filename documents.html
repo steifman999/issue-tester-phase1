@@ -51,6 +51,7 @@
     .pill.cat { background: #e6eefc; color: #1a4a8f; }
     .pill.cat.final_letter { background: #ede7f6; color: #4527a0; }
     .pill.cat.outcome_letter { background: #fff3cd; color: #7a5c00; }
+    .pill.cat.issue_analysis { background: #e8f5ec; color: #1c5c31; }
     .timeline { border-left: 2px solid var(--line); margin: 16px 18px 18px 26px; padding-left: 20px; }
     .tl { position: relative; margin-bottom: 14px; font-size: 13px; }
     .tl:before { content: ''; position: absolute; left: -26px; top: 5px; width: 10px; height: 10px; border-radius: 50%; background: var(--navy); }
@@ -105,6 +106,7 @@
                     <option value="intake">Intake documents</option>
                     <option value="final_letter">Final letters as submitted</option>
                     <option value="outcome_letter">Utility outcome letters</option>
+                    <option value="issue_analysis">Issue analyses (Claude)</option>
                 </select>
                 <label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" id="showRemoved" checked onchange="renderDocs()"> Show removed</label>
             </span>
@@ -122,7 +124,7 @@
         <div id="history"><div class="empty">Loading&hellip;</div></div>
     </div>
 
-    <div class="confid">Private and confidential UtiliSave work product. Do not disseminate.</div>
+    <div class="confid">Private and Confidential UtiliSave Working Document. Do not disseminate.</div>
 </div>
 
 <script>

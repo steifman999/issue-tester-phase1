@@ -7,6 +7,18 @@
     <script src="auth.js"></script>
     <title>UtiliSave Issue Review System - Phase 1</title>
     <style>
+        .ia-panel { margin-top: 14px; border: 1px solid #d7dee7; border-radius: 8px; background: #fbfcfe; padding: 14px 16px; font-size: 13px; line-height: 1.6; color: #1a2129; text-align: left; }
+        .ia-panel h2 { font-size: 15px; color: #0B3E76; margin: 16px 0 6px; }
+        .ia-panel h3, .ia-panel h4 { font-size: 13.5px; color: #0B3E76; margin: 12px 0 4px; }
+        .ia-panel p { margin: 0 0 9px; }
+        .ia-panel ul, .ia-panel ol { margin: 0 0 10px 20px; padding: 0; }
+        .ia-panel table { border-collapse: collapse; margin: 6px 0 12px; font-size: 12px; }
+        .ia-panel th, .ia-panel td { border: 1px solid #e3e8ee; padding: 5px 8px; }
+        .ia-panel code { background: #eef2f7; padding: 1px 4px; border-radius: 3px; }
+        .ia-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 10px; }
+        .ia-chips span { background: #eef4fb; color: #0B3E76; border-radius: 14px; padding: 3px 10px; font-size: 11.5px; font-weight: 600; }
+        .ia-spin { display: inline-block; width: 12px; height: 12px; border: 2px solid #c9d6e4; border-top-color: #0B3E76; border-radius: 50%; animation: iasp .9s linear infinite; vertical-align: -2px; margin-right: 6px; }
+        @keyframes iasp { to { transform: rotate(360deg); } }
         * {
             margin: 0;
             padding: 0;
@@ -580,7 +592,7 @@
             <h1>Form for Submission by Auditor</h1>
             <p>UtiliSave Issue Review System &middot; Phase 1 &mdash; Core Review Module</p>
             <p class="issue-doc-label">Issue Submission Document</p>
-            <p class="confidential-notice">Private and confidential UtiliSave work product. Do not disseminate.</p>
+            <p class="confidential-notice">Private and Confidential UtiliSave Working Document. Do not disseminate.</p>
         </div>
 
         <div id="reopenBanner" style="display:none; margin:16px 0; padding:12px 16px; background:#fff3cd; border:1px solid #e0c880; border-radius:8px; font-size:13px; color:#7a5c00;"></div>
@@ -739,8 +751,8 @@
 
                 <div class="upload-area" id="uploadArea">
                     <p><strong>Click to upload or drag here</strong></p>
-                    <p class="small">Supported: .xlsx (ConEd form), .docx, .pdf, or paste text — up to 20 files</p>
-                    <input type="file" id="fileInput" accept=".xlsx,.docx,.pdf,.txt" multiple>
+                    <p class="small">Supported: .pdf (including scanned), .docx, .doc, .xlsx, .csv, .txt, and photos/scans as .png or .jpg — up to 20 files, 15 MB each. Old .xls spreadsheets: save as .xlsx first.</p>
+                    <input type="file" id="fileInput" accept=".pdf,.docx,.doc,.xlsx,.xlsm,.csv,.txt,.png,.jpg,.jpeg,.gif,.webp" multiple>
                 </div>
 
                 <div id="fileInfo" style="display: none;">
@@ -790,6 +802,7 @@
                         Files the issue in the repository, attaches your documents, and notifies UtiliSave management. You can submit with or without running the score first.
                     </div>
                     <div id="submitStatus" style="display:none; margin-top:12px; padding:12px; border-radius:6px; font-size:13px; line-height:1.55;"></div>
+                    <div id="iaPanel" class="ia-panel" style="display:none;"></div>
                     <div id="submitFallback" style="display:none; margin-top:10px;">
                         <button type="button" class="btn-secondary" style="width:100%; font-size:12px;" onclick="emailSubmissionFallback()">Repository unreachable &mdash; email this submission to ms@utilisave.com instead</button>
                     </div>
@@ -940,6 +953,7 @@
                         <div id="outcomeSaveStatus" style="font-size:12px; margin-top:8px;"></div>
                     </div>
 
+                    <div id="historyIa" class="ia-panel" style="display:none; margin-bottom:18px;"></div>
                     <div id="historyContent"></div>
                 </div>
             </div>
@@ -1621,6 +1635,53 @@
                 .catch(err => setRepoStatus('Error saving: ' + err.message, true));
         }
 
+        // ---------- Issue Analysis (Claude, run with the review project's instructions) ----------
+        // Shows the analysis for a case and refreshes itself while it runs.
+        // The HTML comes from the API, which escapes everything the model wrote.
+        const iaTimers = {};
+        function iaEsc(v) { return String(v === null || v === undefined ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+        function showIssueAnalysis(id, targetId) {
+            const el = document.getElementById(targetId);
+            if (!el || !id) return;
+            if (iaTimers[targetId]) { clearTimeout(iaTimers[targetId]); delete iaTimers[targetId]; }
+            fetch(APPS_SCRIPT_URL + '/submissions/' + encodeURIComponent(id) + '/issue-analysis')
+                .then(r => (/json/.test(r.headers.get('content-type') || '')) ? r.json() : null)
+                .then(d => {
+                    if (!d || d.error) { el.style.display = 'none'; return; }
+                    const cur = (d.analyses || [])[0];
+                    const head = '<strong style="color:#0B3E76; font-size:14px;">Issue Analysis</strong> <span style="color:#6b7785; font-size:12px;">— UtiliSave\'s review of this submission</span>';
+                    el.style.display = 'block';
+                    if (!cur) {
+                        if (targetId === 'iaPanel') {
+                            el.innerHTML = head + '<div style="margin-top:6px;"><span class="ia-spin"></span>Starting the analysis…</div>';
+                            iaTimers[targetId] = setTimeout(() => showIssueAnalysis(id, targetId), 8000);
+                        } else { el.style.display = 'none'; }
+                        return;
+                    }
+                    if (cur.status === 'queued' || cur.status === 'running') {
+                        el.innerHTML = head + '<div style="margin-top:6px;"><span class="ia-spin"></span>Analyzing your submission (round ' + cur.round + '). This usually takes 1–3 minutes. You can leave this page; the result will also be emailed to you.</div>';
+                        iaTimers[targetId] = setTimeout(() => showIssueAnalysis(id, targetId), 10000);
+                        return;
+                    }
+                    if (cur.status === 'error') {
+                        el.innerHTML = head + '<div style="margin-top:6px; color:#7d211a;">The automatic analysis could not run this time. Management has been told and can re-run it. Your submission itself is saved.</div>';
+                        return;
+                    }
+                    const m = cur.meta || {};
+                    const chips = [m.recommendation, m.independentScore !== undefined ? 'Independent score ' + m.independentScore + '/100' : null,
+                                   m.defensibility ? 'Defensibility: ' + m.defensibility : null, m.confidence ? 'Confidence: ' + m.confidence : null]
+                        .filter(Boolean).map(x => '<span>' + iaEsc(x) + '</span>').join('');
+                    el.innerHTML = head +
+                        (chips ? '<div class="ia-chips">' + chips + '</div>' : '') +
+                        (m.topRisk ? '<div style="margin-bottom:6px;"><strong>Top risk:</strong> ' + iaEsc(m.topRisk) + '</div>' : '') +
+                        ((cur.inputs || []).some(x => !x.read) ? '<div style="margin:6px 0 8px; padding:8px 10px; background:#fff3cd; border-radius:6px; color:#7a5c00; font-size:12.5px;"><strong>Some attachments could not be read, so the analysis did not see them:</strong><ul style="margin:4px 0 0 18px;">' +
+                            cur.inputs.filter(x => !x.read).map(x => '<li><strong>' + iaEsc(x.file) + '</strong>: ' + iaEsc(x.how.replace(/^NOT READ — /, '')) + '</li>').join('') + '</ul></div>' : '') +
+                        (cur.fileId ? '<div style="margin-bottom:8px;"><a href="' + US.authedUrl(APPS_SCRIPT_URL + '/files/' + cur.fileId) + '" target="_blank" rel="noopener">Download the analysis as a Word file</a> · <span style="color:#6b7785; font-size:12px;">round ' + cur.round + ', ' + new Date(cur.completedAt).toLocaleString() + '</span></div>' : '') +
+                        '<details open><summary style="cursor:pointer; font-weight:600; color:#0B3E76;">Full analysis</summary><div style="margin-top:8px;">' + (cur.html || '') + '</div></details>';
+                })
+                .catch(() => { el.style.display = 'none'; });
+        }
+
         function setSubmitStatus(html, kind) {
             const el = document.getElementById('submitStatus');
             el.style.display = 'block';
@@ -1708,7 +1769,10 @@
                 scoreBreakdown: lastReviewData ? lastReviewData.breakdown : [],
                 issues: lastReviewData ? lastReviewData.issues : [],
                 suggestions: lastReviewData ? lastReviewData.suggestions : [],
-                notify: true
+                notify: true,
+                // The alert is sent by the /notify call below, once the
+                // attachments are uploaded - not twice.
+                deferNotify: true
             });
 
             fetch(APPS_SCRIPT_URL, {
@@ -1734,7 +1798,8 @@
                     return fetch(APPS_SCRIPT_URL + '/notify', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ submissionId: currentSubmissionId })
+                        // analyze:true starts the Issue Analysis now that the case is complete.
+                        body: JSON.stringify({ submissionId: currentSubmissionId, analyze: true })
                     })
                         .then(r => r.json())
                         .then(n => ({ result, uploaded, notify: n }))
@@ -1745,6 +1810,7 @@
                         + ' (round ' + result.versionNumber + ')'
                         + (uploaded ? ', ' + uploaded + ' attachment(s) uploaded' : '')
                         + '. Keep this ID &mdash; it is how you pull the case back up under Case History.';
+                    showIssueAnalysis(currentSubmissionId, 'iaPanel');
                     if (notify && notify.sent) {
                         msg += '<br>Management notified at ' + (notify.to || 'ms@utilisave.com') + '.';
                         setSubmitStatus(msg, 'ok');
@@ -1913,6 +1979,7 @@
                     // way a deep link from repository.html already does.
                     currentSubmissionId = id;
                     currentHistoryData = data;
+                    showIssueAnalysis(id, 'historyIa');
                     showHistoryExtras(id, data);
 
                     let html = `

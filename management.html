@@ -150,6 +150,26 @@
     .preview-frame { width: 100%; height: 360px; border: 1px solid var(--line); border-radius: 6px; background: #fff; margin-top: 10px; }
     .mailok { color: #1c5c31; font-size: 11.5px; }
     .mailbad { color: #b3261e; font-size: 11.5px; }
+    .ia { font-size: 13px; line-height: 1.6; }
+    .ia h2 { font-size: 14px; color: var(--navy); margin: 18px 0 6px; text-transform: none; letter-spacing: 0; border: 0; padding: 0; }
+    .ia h3, .ia h4 { font-size: 13px; color: var(--navy); margin: 14px 0 4px; }
+    .ia p { margin: 0 0 9px; }
+    .ia ul, .ia ol { margin: 0 0 10px 20px; padding: 0; }
+    .ia li { margin-bottom: 3px; }
+    .ia table { border-collapse: collapse; margin: 6px 0 12px; font-size: 12px; }
+    .ia th, .ia td { border: 1px solid var(--line); padding: 5px 8px; position: static; }
+    .ia code { background: #eef2f7; padding: 1px 4px; border-radius: 3px; font-size: 11.5px; }
+    .drawer .ia h2, .drawer .ia h3, .drawer .ia h4 { text-transform: none; letter-spacing: 0; border-bottom: 0; padding: 0; font-size: 13.5px; color: var(--navy); margin: 16px 0 6px; }
+    .drawer .ia h3:first-child { margin-top: 4px; }
+    .ia th { text-transform: none; letter-spacing: 0; font-size: 12px; color: var(--ink); background: #fafbfd; position: static; cursor: default; }
+    .ia-box { border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; background: #fbfcfe; }
+    .ia-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+    .ia-meta span { background: #eef4fb; color: var(--navy); border-radius: 14px; padding: 3px 10px; font-size: 11.5px; font-weight: 600; }
+    .ia-meta span.rec-submit { background: #e8f5ec; color: #1c5c31; }
+    .ia-meta span.rec-strengthen { background: #fff3cd; color: #7a5c00; }
+    .ia-meta span.rec-hold { background: #fdecea; color: #9b2620; }
+    .spin { display: inline-block; width: 12px; height: 12px; border: 2px solid #c9d6e4; border-top-color: var(--navy); border-radius: 50%; animation: sp 0.9s linear infinite; vertical-align: -2px; margin-right: 6px; }
+    @keyframes sp { to { transform: rotate(360deg); } }
     .doclink { color: var(--navy); font-weight: 600; text-decoration: none; white-space: nowrap; }
     .doclink:hover { text-decoration: underline; }
     @media print {
@@ -164,7 +184,7 @@
 <div class="topbar">
     <div>
         <h1>Issue Management Console</h1>
-        <div class="sub">UtiliSave &mdash; submissions, review status, and outcomes. Private and confidential work product.</div>
+        <div class="sub">UtiliSave &mdash; submissions, review status, and outcomes.</div>
     </div>
     <div class="actions">
         <span id="conn" style="font-size:12px; opacity:.85;">Connecting&hellip;</span>
@@ -280,7 +300,7 @@
             </table>
         </div>
     </div>
-    <div class="confid">Private and confidential UtiliSave work product. Do not disseminate.</div>
+    <div class="confid">Private and Confidential UtiliSave Working Document. Do not disseminate.</div>
 </div>
 
 <div class="scrim" id="scrim" onclick="closeDrawer()"></div>
@@ -606,6 +626,7 @@ function openDetail(id) {
             detail = data;
             renderDetail();
             ensureAiAnalyses(id);
+            loadIssueAnalysis(id);
         })
         .catch(err => {
             detail = null;
@@ -657,7 +678,133 @@ function ensureAiAnalyses(id) {
     });
 }
 
+// ---------- issue analysis (Claude, with this project's instructions) ----------
+let iaTimer = null;
+
+function loadIssueAnalysis(id) {
+    if (iaTimer) { clearTimeout(iaTimer); iaTimer = null; }
+    fetch(API + '/submissions/' + encodeURIComponent(id) + '/issue-analysis')
+        .then(r => (/json/.test(r.headers.get('content-type') || '')) ? r.json() : { error: 'The API does not have the issue analysis feature yet — redeploy server.js.' })
+        .then(d => {
+            if (!selected || selected.SubmissionId !== id || !detail) return;
+            detail.issueAnalysis = d;
+            paintIssueAnalysis();
+            const cur = (d.analyses || [])[0];
+            if (cur && (cur.status === 'queued' || cur.status === 'running')) {
+                iaTimer = setTimeout(() => loadIssueAnalysis(id), 10000);
+            }
+        })
+        .catch(err => {
+            if (!detail) return;
+            detail.issueAnalysis = { error: err.message };
+            paintIssueAnalysis();
+        });
+}
+
+// Repaints only the analysis panel, so a background refresh never wipes
+// edits someone is typing into the Management fields below it.
+function paintIssueAnalysis() {
+    const w = document.getElementById('iaWrap');
+    if (w) w.innerHTML = renderIssueAnalysis(); else renderDetail();
+}
+
+function iaRecClass(rec) {
+    rec = String(rec || '').toLowerCase();
+    if (rec.indexOf('submit now') === 0) return 'rec-submit';
+    if (rec.indexOf('strengthen') === 0) return 'rec-strengthen';
+    if (rec.indexOf('hold') === 0) return 'rec-hold';
+    return '';
+}
+
+function renderIssueAnalysis() {
+    const d = detail.issueAnalysis;
+    let h = '<h3>Issue analysis &nbsp;<span style="text-transform:none; letter-spacing:0; font-weight:400; color:var(--muted);">Claude, using this project\'s instructions and skills</span></h3>';
+    if (!d) return h + '<div class="ia-box"><span class="spin"></span>Loading…</div>';
+    if (d.error) return h + '<div class="banner err">' + esc(d.error) + '</div>';
+    const list = d.analyses || [];
+    const cur = list[0];
+    const rerun = '<button class="btn-light" style="padding:5px 12px; font-size:12px;" onclick="runIssueAnalysis(' + (cur && cur.status === 'done' ? 'true' : 'false') + ')">' +
+        (cur ? 'Run analysis again' : 'Run analysis now') + '</button>';
+    if (!d.configured) h += '<div class="banner warn">ANTHROPIC_API_KEY is not set on the API service, so analyses cannot run. Add it in Railway → issue-review-api → Variables.</div>';
+    if (!cur) return h + '<div class="ia-box">No analysis yet for this case. It runs automatically when an auditor presses Submit. ' + rerun + '</div>';
+
+    if (cur.status === 'queued' || cur.status === 'running') {
+        return h + '<div class="ia-box"><span class="spin"></span><strong>Analyzing round ' + cur.round + '…</strong> started ' + fmtDateTime(cur.createdAt) +
+            '. This usually takes 1–3 minutes; this panel refreshes itself.</div>';
+    }
+    if (cur.status === 'error') {
+        return h + '<div class="banner err"><strong>The analysis for round ' + cur.round + ' failed.</strong> ' + esc(cur.error || '') + '</div>' + rerun;
+    }
+    const m = cur.meta || {};
+    const chips = [];
+    if (m.recommendation) chips.push('<span class="' + iaRecClass(m.recommendation) + '">' + esc(m.recommendation) + '</span>');
+    if (m.independentScore !== undefined && m.independentScore !== null) chips.push('<span>Independent score ' + esc(m.independentScore) + '/100</span>');
+    if (m.clarity) chips.push('<span>Clarity: ' + esc(m.clarity) + '</span>');
+    if (m.defensibility) chips.push('<span>Defensibility: ' + esc(m.defensibility) + '</span>');
+    if (m.confidence) chips.push('<span>Confidence: ' + esc(m.confidence) + '</span>');
+    h += '<div class="ia-box">';
+    h += chips.length ? '<div class="ia-meta">' + chips.join('') + '</div>' : '';
+    if (m.estimatedRecovery) h += '<div style="font-size:12.5px; margin-bottom:4px;"><strong>Estimated recovery:</strong> ' + esc(m.estimatedRecovery) + '</div>';
+    if (m.topRisk) h += '<div style="font-size:12.5px; margin-bottom:8px;"><strong>Top risk:</strong> ' + esc(m.topRisk) + '</div>';
+    h += '<div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px;">' +
+        (cur.fileId ? '<a class="btn-light" style="text-decoration:none; padding:5px 12px; font-size:12px;" href="' + US.authedUrl(API + '/files/' + cur.fileId) + '" target="_blank" rel="noopener">Download Word file</a>' : '') +
+        rerun +
+        '<span class="id">Round ' + cur.round + ' · ' + fmtDateTime(cur.completedAt) + (cur.model ? ' · ' + esc(cur.model) : '') + '</span></div>';
+    if (cur.delivery) h += '<div class="id" style="margin-bottom:8px;">Emailed: ' + esc(cur.delivery) + '</div>';
+    h += iaInputsHtml(cur.inputs);
+    h += iaCostHtml(cur, d);
+    h += '<details open><summary style="cursor:pointer; font-weight:600; color:var(--navy); font-size:12.5px;">Full analysis</summary><div class="ia" style="margin-top:8px;">' + (cur.html || '') + '</div></details>';
+    if ((cur.sources || []).length) {
+        h += '<details style="margin-top:8px;"><summary style="cursor:pointer; font-size:12.5px; color:var(--navy);">Web pages consulted (' + cur.sources.length + ')</summary><ul style="font-size:12px; margin:6px 0 0 18px;">' +
+            cur.sources.map(x => '<li><a href="' + esc(x.url) + '" target="_blank" rel="noopener">' + esc(x.title || x.url) + '</a></li>').join('') + '</ul></details>';
+    }
+    h += '</div>';
+    const older = list.slice(1).filter(a => a.status === 'done');
+    if (older.length) {
+        h += '<details style="margin-top:8px;"><summary style="cursor:pointer; font-size:12.5px; color:var(--navy);">Earlier analyses (' + older.length + ')</summary>' +
+            older.map(a => '<div style="margin:10px 0; padding-top:8px; border-top:1px solid var(--line);"><div class="id">Round ' + a.round + ' · ' + fmtDateTime(a.completedAt) +
+                (a.meta && a.meta.recommendation ? ' · ' + esc(a.meta.recommendation) : '') +
+                (a.fileId ? ' · <a href="' + US.authedUrl(API + '/files/' + a.fileId) + '" target="_blank" rel="noopener">Word</a>' : '') + '</div><div class="ia">' + (a.html || '') + '</div></div>').join('') + '</details>';
+    }
+    return h;
+}
+
+// How each attachment reached Claude. Anything NOT READ is shown in red, with the reason.
+function iaInputsHtml(inputs) {
+    inputs = inputs || [];
+    if (!inputs.length) return '';
+    const unread = inputs.filter(x => !x.read).length;
+    return '<details style="margin-bottom:8px;"' + (unread ? ' open' : '') + '><summary style="cursor:pointer; font-size:12.5px; color:' + (unread ? '#b3261e' : 'var(--navy)') + ';">' +
+        'How the ' + inputs.length + ' attachment(s) were read' + (unread ? ' — ' + unread + ' NOT READ' : ' — all read') + '</summary><ul style="font-size:12px; margin:6px 0 0 18px;">' +
+        inputs.map(x => '<li style="' + (x.read ? '' : 'color:#b3261e;') + '"><strong>' + esc(x.file) + '</strong>: ' + esc(x.how) + '</li>').join('') + '</ul></details>';
+}
+
+// Metered cost: the token and search counts the Claude API reported for this run, times the configured prices.
+function iaCostHtml(cur, d) {
+    if (cur.costUsd === undefined || cur.costUsd === null) return '';
+    const u = cur.usage || {};
+    const n = v => Number(v || 0).toLocaleString();
+    let line = 'Metered cost of this run: <strong>$' + Number(cur.costUsd).toFixed(2) + '</strong> — ' +
+        n(u.input_tokens) + ' input + ' + n(u.cache_creation_input_tokens) + ' cache-write + ' + n(u.cache_read_input_tokens) + ' cache-read tokens, ' +
+        n(u.output_tokens) + ' output tokens, ' + n(u.web_search_requests) + ' web search(es), ' + n(u.api_calls) + ' API call(s).';
+    if (d.monthToDate) line += ' Month to date: <strong>$' + Number(d.monthToDate.costUsd).toFixed(2) + '</strong> over ' + d.monthToDate.runs + ' analyses.';
+    return '<div class="id" style="margin-bottom:8px; line-height:1.5;" title="Counts come from the Claude API response. Prices are the PRICE_* variables on the API service; the Anthropic Console invoice is authoritative.">' + line + '</div>';
+}
+
+function runIssueAnalysis(force) {
+    if (!selected) return;
+    const id = selected.SubmissionId;
+    if (force && !confirm('Run the issue analysis again for this case?\n\nIt takes 1–3 minutes, is a paid Claude API call, and emails the new result to internalaudit@ and the auditor.')) return;
+    fetch(API + '/submissions/' + encodeURIComponent(id) + '/issue-analysis', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ force: !!force })
+    })
+        .then(r => r.json())
+        .then(res => { if (res.error) throw new Error(res.error); loadIssueAnalysis(id); })
+        .catch(err => { detail.issueAnalysis = { error: 'Could not start the analysis: ' + err.message }; paintIssueAnalysis(); });
+}
+
 function closeDrawer() {
+    if (iaTimer) { clearTimeout(iaTimer); iaTimer = null; }
     document.getElementById('drawer').classList.remove('open');
     document.getElementById('scrim').classList.remove('open');
     selected = null; detail = null;
@@ -695,6 +842,8 @@ function renderDetail() {
                       'Awaiting Utility Response', 'Adjusted', 'Rejected', 'Under Appeal', 'Closed'];
 
     let html = '';
+
+    html += '<div id="iaWrap">' + renderIssueAnalysis() + '</div>';
 
     html += '<h3>Management</h3>';
     html += '<div class="grid2">';
@@ -835,7 +984,7 @@ function renderDetail() {
     html += '<h3>Audit trail (' + events.length + ')</h3>';
     html += events.length
         ? '<div class="timeline">' + events.map(e =>
-            '<div class="tl"><strong>' + esc(({ document_added: 'Document added', document_removed: 'Document removed' })[e.EventType] || e.EventType) + '</strong> <span class="when">' + fmtDateTime(e.CreatedAt) +
+            '<div class="tl"><strong>' + esc(({ document_added: 'Document added', document_removed: 'Document removed', issue_analysis: 'Issue analysis' })[e.EventType] || e.EventType) + '</strong> <span class="when">' + fmtDateTime(e.CreatedAt) +
             (e.Actor ? ' · ' + esc(e.Actor) : '') + '</span><div>' + esc(e.Detail || '') + '</div></div>').join('') + '</div>'
         : '<div class="empty">Nothing recorded yet. Changes you save here appear in this trail.</div>';
 

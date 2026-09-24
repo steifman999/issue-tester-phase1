@@ -26,6 +26,10 @@
     // Must match the API used by every page in this app.
     var API = 'https://issue-review-api-production.up.railway.app';
 
+    // Shown on every page of the system, on screen and on every printed page.
+    // Same wording as backend/notices.js - change both together.
+    var CONFIDENTIAL = 'Private and Confidential UtiliSave Working Document. Do not disseminate.';
+
     var REQUIRE_ROLE = (document.currentScript && document.currentScript.dataset.require) || null;
     var TOKEN_KEY = 'us_token';
     var realFetch = window.fetch.bind(window);
@@ -132,7 +136,15 @@
         // screen is present in the DOM but invisible, which looks exactly like
         // a blank white page.
         '#us-gate,#us-gate *{visibility:visible !important;}',
-        '@media print{#us-chip{display:none;}}'
+        '#us-confid{background:#fdecea;color:#7d211a;border-bottom:1px solid #f0c9c5;text-align:center;',
+        "  font:700 12px/1.4 'Segoe UI',-apple-system,Helvetica,Arial,sans-serif;letter-spacing:.2px;padding:6px 12px;}",
+        '#us-confid-print{display:none;}',
+        '#us-card .us-confid{font-size:11.5px;font-weight:700;color:#7d211a;text-align:center;margin-top:16px;}',
+        // Printed: a header and footer on EVERY page (fixed elements repeat per page in print).
+        '@media print{#us-chip{display:none;} #us-confid{position:fixed;top:0;left:0;right:0;}',
+        '  #us-confid-print{display:block;position:fixed;bottom:0;left:0;right:0;text-align:center;',
+        "  font:700 10px 'Segoe UI',Helvetica,Arial,sans-serif;color:#7d211a;border-top:1px solid #f0c9c5;padding:4px;background:#fff;}",
+        '  body{margin-top:34px !important;margin-bottom:30px !important;} @page{margin:14mm 10mm;}}'
     ].join('');
     document.head.appendChild(css);
 
@@ -169,7 +181,7 @@
         gate.style.display = 'flex';
         el('us-card').innerHTML =
             '<h1>UtiliSave Issue Review</h1>' +
-            '<div class="us-sub">Sign in to continue. Private and confidential work product.</div>' +
+            '<div class="us-sub">Sign in to continue.</div>' +
             '<div id="us-msg"></div>' +
             '<form id="us-form" autocomplete="on">' +
             '<label for="us-email">Email</label>' +
@@ -178,7 +190,8 @@
             '<input id="us-pw" type="password" autocomplete="current-password" required>' +
             '<button id="us-go" type="submit">Sign in</button>' +
             '</form>' +
-            '<div class="us-foot">Forgot your password? Ask an administrator to reset it &mdash; you will get a new one by email.</div>';
+            '<div class="us-foot">Forgot your password? Ask an administrator to reset it &mdash; you will get a new one by email.</div>' +
+            '<div class="us-confid">' + CONFIDENTIAL + '</div>';
         if (message) setMsg('info', message);
         el('us-form').addEventListener('submit', doLogin);
         if (prefillEmail) {
@@ -249,7 +262,8 @@
             '<input id="us-new2" type="password" autocomplete="new-password" required>' +
             '<button id="us-go" type="submit">Save and continue</button>' +
             '</form>' +
-            '<button class="us-link" id="us-back" type="button">Sign in as someone else</button>';
+            '<button class="us-link" id="us-back" type="button">Sign in as someone else</button>' +
+            '<div class="us-confid">' + CONFIDENTIAL + '</div>';
 
         el('us-form').addEventListener('submit', doChangePassword);
         el('us-back').addEventListener('click', function () { signOut(); });
@@ -291,7 +305,8 @@
             '<div class="us-sub">This page is for administrators. You are signed in as <strong></strong>, ' +
             'which is an auditor account. Use the submission form instead, or ask for administrator access.</div>' +
             '<button id="us-go" type="button">Go to the submission form</button>' +
-            '<button class="us-link" id="us-back" type="button">Sign out</button>';
+            '<button class="us-link" id="us-back" type="button">Sign out</button>' +
+            '<div class="us-confid">' + CONFIDENTIAL + '</div>';
         el('us-card').querySelector('strong').textContent = state.user ? state.user.email : '';
         el('us-go').addEventListener('click', function () { location.href = 'index.html'; });
         el('us-back').addEventListener('click', function () { signOut(); });
@@ -400,7 +415,21 @@
         }
     }
 
+    function addConfidentialNotice() {
+        if (!document.body || el('us-confid')) return;
+        var top = document.createElement('div');
+        top.id = 'us-confid';
+        top.setAttribute('role', 'note');
+        top.textContent = CONFIDENTIAL;
+        document.body.insertBefore(top, document.body.firstChild);
+        var bottom = document.createElement('div');
+        bottom.id = 'us-confid-print';
+        bottom.textContent = CONFIDENTIAL;
+        document.body.appendChild(bottom);
+    }
+
     function boot() {
+        addConfidentialNotice();
         if (SIGNIN_FOR) {
             if (!state.token) { showLogin(INVITE_MSG, SIGNIN_FOR); return; }
             // Already signed in: continue only if it is the very account the
