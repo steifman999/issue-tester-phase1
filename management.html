@@ -729,8 +729,12 @@ function renderIssueAnalysis() {
     if (!cur) return h + '<div class="ia-box">No analysis yet for this case. It runs automatically when an auditor presses Submit. ' + rerun + '</div>';
 
     if (cur.status === 'queued' || cur.status === 'running') {
-        return h + '<div class="ia-box"><span class="spin"></span><strong>Analyzing round ' + cur.round + '…</strong> started ' + fmtDateTime(cur.createdAt) +
-            '. This usually takes 1–3 minutes; this panel refreshes itself.</div>';
+        // Elapsed time uses the server's clock on both ends, so a PC clock that is off does not matter.
+        const secs = Math.max(0, Math.round((new Date(d.serverNow || Date.now()) - new Date(cur.createdAt)) / 1000));
+        const el = Math.floor(secs / 60) + 'm ' + String(secs % 60).padStart(2, '0') + 's';
+        return h + '<div class="ia-box"><span class="spin"></span><strong>Analyzing round ' + cur.round + '…</strong> running for <strong>' + el + '</strong>.' +
+            ' Most analyses take 3–8 minutes (Claude reads every attachment and checks citations on the web). This panel refreshes itself.' +
+            ' If there is no result after ' + (d.staleMinutes || 20) + ' minutes it is stopped automatically and marked failed, with the reason.</div>';
     }
     if (cur.status === 'error') {
         return h + '<div class="banner err"><strong>The analysis for round ' + cur.round + ' failed.</strong> ' + esc(cur.error || '') + '</div>' + rerun;

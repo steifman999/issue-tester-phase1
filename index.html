@@ -1659,7 +1659,9 @@
                         return;
                     }
                     if (cur.status === 'queued' || cur.status === 'running') {
-                        el.innerHTML = head + '<div style="margin-top:6px;"><span class="ia-spin"></span>Analyzing your submission (round ' + cur.round + '). This usually takes 1–3 minutes. You can leave this page; the result will also be emailed to you.</div>';
+                        const secs = Math.max(0, Math.round((new Date(d.serverNow || Date.now()) - new Date(cur.createdAt)) / 1000));
+                        el.innerHTML = head + '<div style="margin-top:6px;"><span class="ia-spin"></span>Analyzing your submission (round ' + cur.round + ') — running for ' +
+                            Math.floor(secs / 60) + 'm ' + String(secs % 60).padStart(2, '0') + 's. Most take 3–8 minutes. You can leave this page; the result will also be emailed to you.</div>';
                         iaTimers[targetId] = setTimeout(() => showIssueAnalysis(id, targetId), 10000);
                         return;
                     }
