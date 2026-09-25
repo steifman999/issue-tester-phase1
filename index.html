@@ -1671,7 +1671,8 @@
                     }
                     const m = cur.meta || {};
                     const chips = [m.recommendation, m.independentScore !== undefined ? 'Independent score ' + m.independentScore + '/100' : null,
-                                   m.defensibility ? 'Defensibility: ' + m.defensibility : null, m.confidence ? 'Confidence: ' + m.confidence : null]
+                                   m.defensibility ? 'Defensibility: ' + m.defensibility : null, m.confidence ? 'Confidence: ' + m.confidence : null,
+                                   (m.integrity || []).length ? (m.integrity.length + ' integrity flag(s): see the end of the analysis') : null]
                         .filter(Boolean).map(x => '<span>' + iaEsc(x) + '</span>').join('');
                     el.innerHTML = head +
                         (chips ? '<div class="ia-chips">' + chips + '</div>' : '') +

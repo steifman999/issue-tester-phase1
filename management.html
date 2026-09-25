@@ -898,6 +898,7 @@ function redlineBlockHtml(a) {
     h += '<div class="id" style="margin-bottom:6px;">Baseline: <strong>' + esc(rl.sourceName) + '</strong> · <ins style="color:#1e7e34;">inserted</ins> · <del style="color:#cc0000;">deleted</del>' +
         (a.redlineFileId ? ' · <a href="' + US.authedUrl(API + '/files/' + a.redlineFileId) + '" target="_blank" rel="noopener">Download redline (Word)</a>' : '') + '</div>';
     if (rl.truncated) h += '<div class="banner warn">The redline reached its length limit and may stop before the end of the letter.</div>';
+    if ((rl.integrity || []).length) h += '<div class="banner err"><strong>Integrity checks on this letter:</strong><ul style="margin:6px 0 0 18px;">' + rl.integrity.map(f => '<li><strong>' + esc(f.check) + ':</strong> ' + esc(f.detail) + '</li>').join('') + '</ul></div>';
     if ((rl.changeSummary || []).length) h += '<details style="margin-bottom:8px;"><summary style="cursor:pointer; font-size:12.5px; color:var(--navy);">Changes made (' + rl.changeSummary.length + ')</summary><ul style="font-size:12px; margin:6px 0 0 18px;">' +
         rl.changeSummary.map(c => '<li>' + esc(c) + '</li>').join('') + '</ul></details>';
     return h + '<div class="redline prose">' + sanitizeRedlineHtml(rl.html || '') + '</div></div>';
@@ -913,6 +914,10 @@ function analysisBodyHtml(cur, d, opts) {
     if (m.clarity) chips.push('<span>Clarity: ' + esc(m.clarity) + '</span>');
     if (m.defensibility) chips.push('<span>Defensibility: ' + esc(m.defensibility) + '</span>');
     if (m.confidence) chips.push('<span>Confidence: ' + esc(m.confidence) + '</span>');
+    if (m.likelihoodPct !== undefined && m.likelihoodPct !== null && m.likelihoodPct !== '') chips.push('<span>Likelihood: ' + esc(m.likelihoodPct) + '%</span>');
+    const flags = m.integrity || [];
+    if (m.integrity) chips.push('<span style="' + (flags.length ? 'background:#fdecea; color:#9b2620;' : 'background:#e6f4ea; color:#1c5c31;') + '">' +
+        (flags.length ? flags.length + ' integrity flag' + (flags.length > 1 ? 's' : '') : 'Integrity checks passed') + '</span>');
     let h = '<div class="ia-box">';
     h += chips.length ? '<div class="ia-meta">' + chips.join('') + '</div>' : '';
     if (m.estimatedRecovery) h += '<div style="font-size:12.5px; margin-bottom:4px;"><strong>Estimated recovery:</strong> ' + esc(m.estimatedRecovery) + '</div>';
@@ -924,6 +929,12 @@ function analysisBodyHtml(cur, d, opts) {
         '<span class="id">' + (cur.caseVersion ? 'Version ' + cur.caseVersion + ' · ' : '') + 'Round ' + cur.round + ' · ' + fmtDateTime(cur.completedAt) + (cur.model ? ' · ' + esc(cur.model) : '') +
         (cur.trigger === 'redline' ? ' · redline only' : '') + '</span></div>';
     if (cur.delivery) h += '<div class="id" style="margin-bottom:8px;">Emailed: ' + esc(cur.delivery) + '</div>';
+    if (flags.length) h += '<div class="banner err" style="margin-bottom:8px;"><strong>Integrity checks (automatic) — verify before relying on this analysis:</strong><ul style="margin:6px 0 0 18px;">' +
+        flags.map(f => '<li><strong>' + esc(f.check) + ':</strong> ' + esc(f.detail) + '</li>').join('') + '</ul></div>';
+    if (Array.isArray(m.scoreBreakdown) && m.scoreBreakdown.length) {
+        h += '<details style="margin-bottom:8px;"><summary style="cursor:pointer; font-size:12.5px; color:var(--navy);">Score breakdown (fixed rubric) — ' + esc(m.independentScore) + '/100</summary><table style="font-size:12px; margin-top:6px; border-collapse:collapse;">' +
+            m.scoreBreakdown.map(x => '<tr><td style="padding:2px 12px 2px 0;">' + esc(x.factor) + '</td><td style="padding:2px 8px; text-align:right;"><strong>' + esc(x.points) + '</strong> / ' + esc(x.max) + '</td><td style="padding:2px 0; color:#6b7785;">' + esc(x.reason || '') + '</td></tr>').join('') + '</table></details>';
+    }
     h += iaInputsHtml(cur.inputs);
     h += iaCostHtml(cur, d || {});
     h += '<details open><summary style="cursor:pointer; font-weight:600; color:var(--navy); font-size:12.5px;">Full analysis</summary><div class="ia" style="margin-top:8px;">' + (cur.html || '') + '</div></details>';
@@ -1045,9 +1056,10 @@ function iaInputsHtml(inputs) {
     inputs = inputs || [];
     if (!inputs.length) return '';
     const unread = inputs.filter(x => !x.read).length;
+    const partial = inputs.filter(x => x.read && x.partial).length;
     return '<details style="margin-bottom:8px;"' + (unread ? ' open' : '') + '><summary style="cursor:pointer; font-size:12.5px; color:' + (unread ? '#b3261e' : 'var(--navy)') + ';">' +
-        'How the ' + inputs.length + ' attachment(s) were read' + (unread ? ' — ' + unread + ' NOT READ' : ' — all read') + '</summary><ul style="font-size:12px; margin:6px 0 0 18px;">' +
-        inputs.map(x => '<li style="' + (x.read ? '' : 'color:#b3261e;') + '"><strong>' + esc(x.file) + '</strong>: ' + esc(x.how) + '</li>').join('') + '</ul></details>';
+        'How the ' + inputs.length + ' attachment(s) were read' + (unread ? ' — ' + unread + ' NOT READ' : '') + (partial ? ' — ' + partial + ' PARTLY READ' : '') + (!unread && !partial ? ' — all read in full' : '') + '</summary><ul style="font-size:12px; margin:6px 0 0 18px;">' +
+        inputs.map(x => '<li style="' + (!x.read ? 'color:#b3261e;' : x.partial ? 'color:#8a5a00;' : '') + '"><strong>' + esc(x.file) + '</strong>: ' + esc(x.how) + '</li>').join('') + '</ul></details>';
 }
 
 // Metered cost: the token and search counts the Claude API reported for this run, times the configured prices.
