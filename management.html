@@ -133,6 +133,23 @@
     .prose { white-space: pre-wrap; background: #f7f9fc; border: 1px solid var(--line); border-radius: 6px; padding: 13px; font-size: 12.5px; line-height: 1.6; max-height: 320px; overflow: auto; }
     .filelist a { display: block; font-size: 12.5px; color: var(--navy); padding: 5px 0; }
     .empty { padding: 38px 20px; text-align: center; color: var(--muted); font-size: 13px; }
+    .tabs { display: flex; gap: 4px; margin: 0 0 12px; border-bottom: 1px solid var(--line); }
+    .tabs button { background: none; border: 0; border-bottom: 3px solid transparent; padding: 8px 14px; font: inherit; font-size: 13px; color: var(--muted); cursor: pointer; margin-bottom: -1px; }
+    .tabs button.on { color: var(--navy); border-bottom-color: var(--navy); font-weight: 600; }
+    .rowbtns { display: flex; gap: 6px; white-space: nowrap; }
+    .rowbtns button { font: inherit; font-size: 11.5px; padding: 4px 9px; border-radius: 5px; border: 1px solid var(--line); background: #fff; color: var(--navy); cursor: pointer; }
+    .rowbtns button:hover { background: #eef4fb; }
+    .rowbtns button.danger { color: #b3261e; border-color: #f0c9c5; }
+    .rowbtns button.danger:hover { background: #fdecea; }
+    .vbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; background: #f4f7fb; border: 1px solid var(--line); border-radius: 8px; padding: 9px 12px; margin-bottom: 14px; font-size: 12.5px; }
+    .vbar select { font: inherit; font-size: 12.5px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 5px; max-width: 100%; }
+    .vbar .old { color: #8a5a00; font-weight: 600; }
+    .letterbox { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; font-size: 12.5px; }
+    .letterbox.need { border-color: #f0c36d; background: #fff8e6; }
+    .letterbox label, #lmBody label { display: flex; gap: 8px; align-items: baseline; padding: 4px 0; cursor: pointer; font-size: 13px; }
+    .redline ins { color: #1e7e34; text-decoration: underline; }
+    .redline del { color: #cc0000; }
+    .redline p { margin: 0 0 10px; }
     .savebar { background: #fff; border-top: 1px solid var(--line); padding: 12px 22px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
     .savemsg { font-size: 12px; }
     .confid { font-size: 11px; color: var(--muted); margin-top: 22px; text-align: center; }
@@ -194,6 +211,7 @@
         <button class="btn-ghost" onclick="togglePeople()">People &amp; logins</button>
         <button class="btn-ghost" onclick="toggleOptions()">Dropdown options</button>
         <button class="btn-ghost" onclick="openForm()">Submission form</button>
+        <span id="us-chip-slot"></span>
     </div>
 </div>
 
@@ -278,6 +296,10 @@
     <div class="kpis" id="kpis"></div>
 
     <div class="panel">
+        <div class="tabs">
+            <button id="tabActive" class="on" onclick="setMode('active')">Cases</button>
+            <button id="tabDeleted" onclick="setMode('deleted')">Deleted cases</button>
+        </div>
         <div class="filters">
             <input type="search" id="q" placeholder="Search customer, account, auditor, internal ID, utility ID&hellip;" oninput="render()">
             <select id="fStatus" onchange="render()"><option value="">All statuses</option></select>
@@ -315,10 +337,24 @@
     <div class="body" id="dBody"><div class="empty">Select a submission.</div></div>
     <div class="savebar">
         <button class="btn" id="saveBtn" onclick="saveManagement()">Save changes</button>
-        <button class="btn-light" onclick="resendNotify()">Re-send email</button>
+        <button class="btn-light" id="resendBtn" onclick="resendCaseFile()" title="Emails internalaudit@ the complete file set for the version shown">Re-send email</button>
         <a id="docsLink" class="btn-light" style="text-decoration:none; padding:8px 16px; display:inline-block;" href="#" target="_blank" rel="noopener">Documents &amp; history</a>
-        <a id="zipLink" class="btn-light" style="text-decoration:none; padding:8px 16px; display:inline-block;" href="#" target="_blank" rel="noopener">Download case ZIP</a>
+        <a id="zipLink" class="btn-light" style="text-decoration:none; padding:8px 16px; display:inline-block;" href="#" title="This version, with every attachment, the analysis and the redline, as one ZIP">Download this version (ZIP)</a>
         <span class="savemsg" id="saveMsg"></span>
+    </div>
+</div>
+
+<div class="modal-scrim" id="letterScrim" onclick="closeLetterModal()"></div>
+<div class="modal" id="letterModal" role="dialog" aria-modal="true" aria-labelledby="lmTitle">
+    <div class="mhead">
+        <div><h2 id="lmTitle">Which file is the letter?</h2><div class="hint">The redline is applied to the letter you check here. Check one of the case's files, or add the letter.</div></div>
+        <button class="btn-light" onclick="closeLetterModal()">Close</button>
+    </div>
+    <div class="mbody" id="lmBody"></div>
+    <div class="mfoot">
+        <button class="btn" onclick="letterModalRun(true)">Use this letter and run</button>
+        <button class="btn-light" onclick="letterModalRun(false)">Run without a redline</button>
+        <span class="hint" id="lmMsg"></span>
     </div>
 </div>
 
@@ -368,6 +404,12 @@ let sortDir = -1;
 let selected = null;   // currently open row
 let detail = null;     // its full history payload
 let kpiFilter = null;
+let MODE = 'active';   // 'active' | 'deleted'
+let DELETED = [];      // deleted cases (GET /?action=list&deleted=1)
+let VERS = null;       // { current, versions: [...] } for the open case
+let VSEL = null;       // the version number being shown in the drawer
+let VDETAIL = null;    // that version's snapshot, when it is not the current one
+let pendingRerun = null;
 
 // ---------- helpers ----------
 function esc(v) {
@@ -451,12 +493,25 @@ const COLUMNS = [
     { key: 'AssignedTo',   label: 'Owner',       render: r => esc(r.AssignedTo || '—') },
     { key: 'DueDate',      label: 'Next date',   render: r => dueCell(r.DueDate) },
     { key: 'FileCount',    label: 'Docs',        render: r => '<a class="doclink" href="' + docsUrl(r.SubmissionId) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="All documents filed on this case, and their history">&#128196; ' + (r.FileCount || 0) + '</a>' },
-    { key: 'UpdatedAt',    label: 'Updated',     cls: 'num', render: r => '<span class="id">' + fmtDate(r.UpdatedAt) + '</span>' }
+    { key: 'UpdatedAt',    label: 'Updated',     cls: 'num', render: r => '<span class="id">' + fmtDate(r.UpdatedAt) + '</span>' },
+    { key: '_actions',     label: '',            nosort: true, render: r => rowButtons(r) }
 ];
+
+function rowButtons(r) {
+    const id = esc(r.SubmissionId);
+    if (MODE === 'deleted') {
+        return '<div class="rowbtns"><button onclick="event.stopPropagation(); restoreCase(\'' + id + '\')">Restore</button></div>' +
+            '<div class="id" style="margin-top:4px;">deleted ' + fmtDate(r.DeletedAt) + (r.DeletedBy ? ' · ' + esc(r.DeletedBy) : '') + '</div>';
+    }
+    return '<div class="rowbtns">' +
+        '<button onclick="event.stopPropagation(); rerunFromRow(\'' + id + '\')" title="Run the analysis again (the current state is kept as the prior version)">Rerun</button>' +
+        '<button class="danger" onclick="event.stopPropagation(); deleteCase(\'' + id + '\')" title="Move to Deleted cases (can be restored)">Delete</button></div>';
+}
 
 // ---------- load ----------
 function applyList(data) {
     ALL = data.submissions || [];
+    paintTabs();
     document.getElementById('conn').textContent = 'Connected · ' + ALL.length + ' case(s) · ' + new Date().toLocaleTimeString();
     setBanner('', '');
     fillFilterOptions();
@@ -477,11 +532,52 @@ function showOffline(err) {
 
 function loadAll() {
     document.getElementById('conn').textContent = 'Loading…';
+    loadDeleted();
     return fetch(API + '/?action=list')
         .then(r => { if (!r.ok) throw new Error('The API answered HTTP ' + r.status + '.'); return r.json(); })
         .then(data => { if (data.error) throw new Error(data.error); applyList(data); })
         .catch(showOffline);
 }
+
+function loadDeleted() {
+    return fetch(API + '/?action=list&deleted=1')
+        .then(r => r.json())
+        .then(d => { DELETED = (d && d.submissions) || []; paintTabs(); if (MODE === 'deleted') render(); })
+        .catch(() => {});
+}
+
+function paintTabs() {
+    document.getElementById('tabActive').textContent = 'Cases (' + ALL.length + ')';
+    document.getElementById('tabDeleted').textContent = 'Deleted cases (' + DELETED.length + ')';
+    document.getElementById('tabActive').classList.toggle('on', MODE === 'active');
+    document.getElementById('tabDeleted').classList.toggle('on', MODE === 'deleted');
+}
+
+function setMode(m) { MODE = m; kpiFilter = null; paintTabs(); render(); }
+
+function deleteCase(id) {
+    const r = ALL.find(x => x.SubmissionId === id);
+    const reason = prompt('Move "' + (r ? r.CustomerName : id) + '" (' + id + ') to Deleted cases?\n\nNothing is erased: it can be restored from the Deleted cases tab.\n\nReason (optional):', '');
+    if (reason === null) return;
+    fetch(API + '/submissions/' + encodeURIComponent(id) + '/delete', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason })
+    }).then(r => r.json()).then(res => {
+        if (res.error) throw new Error(res.error);
+        if (selected && selected.SubmissionId === id) closeDrawer();
+        loadAll();
+    }).catch(err => alert('Could not delete: ' + err.message));
+}
+
+function restoreCase(id) {
+    fetch(API + '/submissions/' + encodeURIComponent(id) + '/restore', { method: 'POST' })
+        .then(r => r.json()).then(res => {
+            if (res.error) throw new Error(res.error);
+            if (selected && selected.SubmissionId === id) closeDrawer();
+            loadAll();
+        }).catch(err => alert('Could not restore: ' + err.message));
+}
+
+function rerunFromRow(id) { pendingRerun = id; openDetail(id); }
 
 function fillFilterOptions() {
     const fill = (id, values) => {
@@ -557,7 +653,8 @@ function render() {
     const fp = document.getElementById('fPriority').value;
     const fsc = document.getElementById('fScore').value;
 
-    VIEW = ALL.filter(r => {
+    const BASE = MODE === 'deleted' ? DELETED : ALL;
+    VIEW = BASE.filter(r => {
         if (!passesKpi(r)) return false;
         if (fs && r.Status !== fs) return false;
         if (fu && r.UtilityName !== fu) return false;
@@ -585,7 +682,7 @@ function render() {
         return String(x).localeCompare(String(y)) * sortDir;
     });
 
-    document.getElementById('head').innerHTML = COLUMNS.map(c =>
+    document.getElementById('head').innerHTML = COLUMNS.map(c => c.nosort ? '<th style="cursor:default;"></th>' :
         '<th onclick="sortBy(\'' + c.key + '\')">' + esc(c.label) +
         (sortKey === c.key ? ' <span class="arrow">' + (sortDir === 1 ? '▲' : '▼') + '</span>' : '') + '</th>').join('');
 
@@ -593,10 +690,11 @@ function render() {
         ? VIEW.map(r => '<tr onclick="openDetail(\'' + r.SubmissionId + '\')" class="' + (selected && selected.SubmissionId === r.SubmissionId ? 'sel' : '') + '">' +
             COLUMNS.map(c => '<td class="' + (c.cls || '') + '">' + c.render(r) + '</td>').join('') + '</tr>').join('')
         : '<tr><td colspan="' + COLUMNS.length + '"><div class="empty">' +
-            (ALL.length ? 'No cases match these filters.' : 'No submissions in the repository yet — or the API is unreachable (see the message above).') +
+            (MODE === 'deleted' ? (DELETED.length ? 'No deleted cases match these filters.' : 'No deleted cases.') :
+             ALL.length ? 'No cases match these filters.' : 'No submissions in the repository yet — or the API is unreachable (see the message above).') +
           '</div></td></tr>';
 
-    document.getElementById('count').textContent = VIEW.length + ' of ' + ALL.length + ' shown · ' +
+    document.getElementById('count').textContent = VIEW.length + ' of ' + BASE.length + ' shown · ' +
         money(VIEW.reduce((s, r) => s + total(r), 0)) + ' at stake';
 }
 
@@ -607,14 +705,15 @@ function sortBy(key) {
 
 // ---------- detail drawer ----------
 function openDetail(id) {
-    selected = ALL.find(r => r.SubmissionId === id) || null;
+    selected = ALL.find(r => r.SubmissionId === id) || DELETED.find(r => r.SubmissionId === id) || null;
     if (!selected) return;
+    if (!VERS || !detail || !detail.submission || detail._id !== id) { VERS = null; VSEL = null; VDETAIL = null; }
     render();
     document.getElementById('drawer').classList.add('open');
     document.getElementById('scrim').classList.add('open');
     document.getElementById('dTitle').textContent = selected.CustomerName;
     document.getElementById('dSub').textContent = selected.SubmissionId + ' · ' + selected.UtilityName + ' · ' + money(total(selected));
-    document.getElementById('zipLink').href = US.authedUrl(API + '/export/' + encodeURIComponent(id) + '/zip');
+    document.getElementById('zipLink').removeAttribute('href');
     document.getElementById('docsLink').href = docsUrl(id);
     document.getElementById('saveMsg').textContent = '';
     document.getElementById('dBody').innerHTML = '<div class="empty">Loading case history…</div>';
@@ -624,9 +723,11 @@ function openDetail(id) {
         .then(data => {
             if (data.error) throw new Error(data.error);
             detail = data;
+            detail._id = id;
             renderDetail();
             ensureAiAnalyses(id);
             loadIssueAnalysis(id);
+            loadVersions(id);
         })
         .catch(err => {
             detail = null;
@@ -647,7 +748,8 @@ function ensureAiAnalyses(id) {
     const ai = (detail && detail.aiAnalyses) || {};
     const jobs = [];
     if (!ai.score_gap) jobs.push({ path: '/analyze/score-gap', kind: 'score_gap' });
-    if (!ai.redline_letter) jobs.push({ path: '/analyze/redline-letter', kind: 'redline_letter' });
+    // The redline now comes with every issue analysis (applied to the letter
+    // designated below), so the older form-style draft is not generated here.
     if (!jobs.length) return;
 
     jobs.forEach(job => {
@@ -687,12 +789,16 @@ function loadIssueAnalysis(id) {
         .then(r => (/json/.test(r.headers.get('content-type') || '')) ? r.json() : { error: 'The API does not have the issue analysis feature yet — redeploy server.js.' })
         .then(d => {
             if (!selected || selected.SubmissionId !== id || !detail) return;
+            const prev = detail.issueAnalysis && (detail.issueAnalysis.analyses || [])[0];
             detail.issueAnalysis = d;
             paintIssueAnalysis();
             const cur = (d.analyses || [])[0];
             if (cur && (cur.status === 'queued' || cur.status === 'running')) {
                 iaTimer = setTimeout(() => loadIssueAnalysis(id), 10000);
+            } else if (prev && (prev.status === 'queued' || prev.status === 'running')) {
+                loadVersions(id);   // a run just finished: it is the new current version
             }
+            if (pendingRerun === id) { pendingRerun = null; runIssueAnalysis(!!cur && cur.status === 'done'); }
         })
         .catch(err => {
             if (!detail) return;
@@ -704,6 +810,7 @@ function loadIssueAnalysis(id) {
 // Repaints only the analysis panel, so a background refresh never wipes
 // edits someone is typing into the Management fields below it.
 function paintIssueAnalysis() {
+    if (isOldVersion()) return;   // an earlier version is on screen; leave it alone
     const w = document.getElementById('iaWrap');
     if (w) w.innerHTML = renderIssueAnalysis(); else renderDetail();
 }
@@ -716,6 +823,118 @@ function iaRecClass(rec) {
     return '';
 }
 
+function caseFiles() { return ((detail && detail.files) || []).filter(f => f.Category !== 'issue_analysis'); }
+function letterId() { return detail && detail.submission ? (detail.submission.LetterFileId || null) : null; }
+
+// The letter the redline is applied to: one radio per case file, plus "add the letter".
+function letterChooserHtml(ctx) {
+    const files = caseFiles();
+    const cur = letterId();
+    const name = 'lf_' + ctx;
+    let h = files.length ? files.map(f =>
+        '<label><input type="radio" name="' + name + '" value="' + f.FileId + '"' + (f.FileId === cur ? ' checked' : '') +
+        (ctx === 'drawer' ? ' onchange="setLetter(' + f.FileId + ')"' : '') + '> <span>' + esc(f.FileName) +
+        ' <span class="id">(' + esc(f.Category || 'intake') + ' · round ' + f.VersionNumber + ')</span></span></label>').join('')
+        : '<div class="id">No files on this case yet.</div>';
+    h += '<div style="margin-top:8px;"><label style="display:inline-flex; cursor:pointer;" class="btn-light" title="Upload the letter; it is added to the case and checked">' +
+        '<input type="file" accept=".docx,.doc,.pdf,.txt,.eml,.msg" style="display:none;" onchange="uploadLetter(this, \'' + ctx + '\')">Add the letter file&hellip;</label></div>';
+    return h;
+}
+
+function letterBoxHtml() {
+    const cur = letterId();
+    const f = caseFiles().find(x => x.FileId === cur);
+    let h = '<div class="letterbox' + (f ? '' : ' need') + '"><strong>Letter to redline:</strong> ' +
+        (f ? esc(f.FileName) : '<span style="color:#8a5a00;">none chosen. Check the letter below, or add it, so the redline can be made.</span>');
+    h += '<details' + (f ? '' : ' open') + ' style="margin-top:6px;"><summary style="cursor:pointer; color:var(--navy);">Choose the letter</summary><div style="margin-top:6px;">' + letterChooserHtml('drawer') + '</div></details>';
+    if (f) h += '<div style="margin-top:8px;"><button class="btn-light" style="padding:5px 12px; font-size:12px;" onclick="makeRedline()" title="Redlines this letter against the latest analysis, without re-running the analysis. Becomes the next version.">Make redline</button></div>';
+    return h + '</div>';
+}
+
+function setLetter(fileId) {
+    if (!selected) return;
+    const id = selected.SubmissionId;
+    return fetch(API + '/submissions/' + encodeURIComponent(id) + '/letter', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fileId })
+    }).then(r => r.json()).then(res => {
+        if (res.error) throw new Error(res.error);
+        if (detail && detail.submission) detail.submission.LetterFileId = res.letterFileId;
+        paintIssueAnalysis();
+        return res;
+    }).catch(err => { alert('Could not set the letter: ' + err.message); throw err; });
+}
+
+function uploadLetter(input, ctx) {
+    if (!selected || !input.files || !input.files.length) return;
+    const id = selected.SubmissionId;
+    const fd = new FormData();
+    fd.append('submissionId', id);
+    fd.append('files', input.files[0]);
+    const note = ctx === 'modal' ? document.getElementById('lmMsg') : null;
+    if (note) note.textContent = 'Uploading…';
+    fetch(API + '/files', { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(res => {
+            if (res.error) throw new Error(res.error);
+            const f = res.files && res.files[0];
+            if (!f) throw new Error('The upload returned no file.');
+            detail.files = (detail.files || []).concat([{ FileId: f.FileId, FileName: f.FileName, FileSize: f.FileSize, Category: 'intake', VersionNumber: (detail.versions && detail.versions[0] && detail.versions[0].VersionNumber) || 1 }]);
+            return setLetter(f.FileId);
+        })
+        .then(() => { if (ctx === 'modal') { document.getElementById('lmBody').innerHTML = letterChooserHtml('modal'); if (note) note.textContent = 'Added and checked.'; } })
+        .catch(err => { if (note) note.textContent = 'Upload failed: ' + err.message; else alert('Upload failed: ' + err.message); });
+}
+
+// The redline, as shown at the end of the analysis.
+function redlineBlockHtml(a) {
+    const rl = a.redline;
+    let h = '<div style="margin-top:14px; padding-top:10px; border-top:2px solid var(--line);"><div style="font-weight:600; color:var(--navy); font-size:13.5px; margin-bottom:6px;">Redlined letter</div>';
+    if (!rl) return h + '<div class="id">This run was made before redlines were added.</div></div>';
+    if (rl.status !== 'done') {
+        return h + '<div class="banner warn" style="margin:0;">' + (rl.status === 'no_letter'
+            ? 'Pending: no letter was chosen as the baseline' + (rl.error ? ' (' + esc(rl.error) + ')' : '') + '. Choose the letter above, then click <strong>Make redline</strong>.'
+            : 'Not produced: ' + esc(rl.error || 'unknown reason')) + '</div></div>';
+    }
+    h += '<div class="id" style="margin-bottom:6px;">Baseline: <strong>' + esc(rl.sourceName) + '</strong> · <ins style="color:#1e7e34;">inserted</ins> · <del style="color:#cc0000;">deleted</del>' +
+        (a.redlineFileId ? ' · <a href="' + US.authedUrl(API + '/files/' + a.redlineFileId) + '" target="_blank" rel="noopener">Download redline (Word)</a>' : '') + '</div>';
+    if (rl.truncated) h += '<div class="banner warn">The redline reached its length limit and may stop before the end of the letter.</div>';
+    if ((rl.changeSummary || []).length) h += '<details style="margin-bottom:8px;"><summary style="cursor:pointer; font-size:12.5px; color:var(--navy);">Changes made (' + rl.changeSummary.length + ')</summary><ul style="font-size:12px; margin:6px 0 0 18px;">' +
+        rl.changeSummary.map(c => '<li>' + esc(c) + '</li>').join('') + '</ul></details>';
+    return h + '<div class="redline prose">' + sanitizeRedlineHtml(rl.html || '') + '</div></div>';
+}
+
+// One finished analysis: chips, downloads, inputs, cost, full text, then the redline.
+function analysisBodyHtml(cur, d, opts) {
+    opts = opts || {};
+    const m = cur.meta || {};
+    const chips = [];
+    if (m.recommendation) chips.push('<span class="' + iaRecClass(m.recommendation) + '">' + esc(m.recommendation) + '</span>');
+    if (m.independentScore !== undefined && m.independentScore !== null) chips.push('<span>Independent score ' + esc(m.independentScore) + '/100</span>');
+    if (m.clarity) chips.push('<span>Clarity: ' + esc(m.clarity) + '</span>');
+    if (m.defensibility) chips.push('<span>Defensibility: ' + esc(m.defensibility) + '</span>');
+    if (m.confidence) chips.push('<span>Confidence: ' + esc(m.confidence) + '</span>');
+    let h = '<div class="ia-box">';
+    h += chips.length ? '<div class="ia-meta">' + chips.join('') + '</div>' : '';
+    if (m.estimatedRecovery) h += '<div style="font-size:12.5px; margin-bottom:4px;"><strong>Estimated recovery:</strong> ' + esc(m.estimatedRecovery) + '</div>';
+    if (m.topRisk) h += '<div style="font-size:12.5px; margin-bottom:8px;"><strong>Top risk:</strong> ' + esc(m.topRisk) + '</div>';
+    h += '<div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px;">' +
+        (cur.fileId ? '<a class="btn-light" style="text-decoration:none; padding:5px 12px; font-size:12px;" href="' + US.authedUrl(API + '/files/' + cur.fileId) + '" target="_blank" rel="noopener">Download Word file</a>' : '') +
+        (cur.redlineFileId ? '<a class="btn-light" style="text-decoration:none; padding:5px 12px; font-size:12px;" href="' + US.authedUrl(API + '/files/' + cur.redlineFileId) + '" target="_blank" rel="noopener">Download redline</a>' : '') +
+        (opts.rerun || '') +
+        '<span class="id">' + (cur.caseVersion ? 'Version ' + cur.caseVersion + ' · ' : '') + 'Round ' + cur.round + ' · ' + fmtDateTime(cur.completedAt) + (cur.model ? ' · ' + esc(cur.model) : '') +
+        (cur.trigger === 'redline' ? ' · redline only' : '') + '</span></div>';
+    if (cur.delivery) h += '<div class="id" style="margin-bottom:8px;">Emailed: ' + esc(cur.delivery) + '</div>';
+    h += iaInputsHtml(cur.inputs);
+    h += iaCostHtml(cur, d || {});
+    h += '<details open><summary style="cursor:pointer; font-weight:600; color:var(--navy); font-size:12.5px;">Full analysis</summary><div class="ia" style="margin-top:8px;">' + (cur.html || '') + '</div></details>';
+    if ((cur.sources || []).length) {
+        h += '<details style="margin-top:8px;"><summary style="cursor:pointer; font-size:12.5px; color:var(--navy);">Web pages consulted (' + cur.sources.length + ')</summary><ul style="font-size:12px; margin:6px 0 0 18px;">' +
+            cur.sources.map(x => '<li><a href="' + esc(x.url) + '" target="_blank" rel="noopener">' + esc(x.title || x.url) + '</a></li>').join('') + '</ul></details>';
+    }
+    h += redlineBlockHtml(cur);
+    return h + '</div>';
+}
+
 function renderIssueAnalysis() {
     const d = detail.issueAnalysis;
     let h = '<h3>Issue analysis &nbsp;<span style="text-transform:none; letter-spacing:0; font-weight:400; color:var(--muted);">Claude, using this project\'s instructions and skills</span></h3>';
@@ -726,51 +945,99 @@ function renderIssueAnalysis() {
     const rerun = '<button class="btn-light" style="padding:5px 12px; font-size:12px;" onclick="runIssueAnalysis(' + (cur && cur.status === 'done' ? 'true' : 'false') + ')">' +
         (cur ? 'Run analysis again' : 'Run analysis now') + '</button>';
     if (!d.configured) h += '<div class="banner warn">ANTHROPIC_API_KEY is not set on the API service, so analyses cannot run. Add it in Railway → issue-review-api → Variables.</div>';
+    h += letterBoxHtml();
     if (!cur) return h + '<div class="ia-box">No analysis yet for this case. It runs automatically when an auditor presses Submit. ' + rerun + '</div>';
 
     if (cur.status === 'queued' || cur.status === 'running') {
         // Elapsed time uses the server's clock on both ends, so a PC clock that is off does not matter.
         const secs = Math.max(0, Math.round((new Date(d.serverNow || Date.now()) - new Date(cur.createdAt)) / 1000));
         const el = Math.floor(secs / 60) + 'm ' + String(secs % 60).padStart(2, '0') + 's';
+        if (cur.trigger === 'redline') return h + '<div class="ia-box"><span class="spin"></span><strong>Making the redline…</strong> running for <strong>' + el + '</strong>. Usually 1–3 minutes. This panel refreshes itself.</div>';
         return h + '<div class="ia-box"><span class="spin"></span><strong>Analyzing round ' + cur.round + '…</strong> running for <strong>' + el + '</strong>.' +
-            ' Most analyses take 3–8 minutes (Claude reads every attachment and checks citations on the web). This panel refreshes itself.' +
+            ' Most analyses take 3–8 minutes, plus 1–3 for the redline (Claude reads every attachment and checks citations on the web). This panel refreshes itself.' +
             ' If there is no result after ' + (d.staleMinutes || 20) + ' minutes it is stopped automatically and marked failed, with the reason.</div>';
     }
     if (cur.status === 'error') {
-        return h + '<div class="banner err"><strong>The analysis for round ' + cur.round + ' failed.</strong> ' + esc(cur.error || '') + '</div>' + rerun;
+        return h + '<div class="banner err"><strong>The ' + (cur.trigger === 'redline' ? 'redline' : 'analysis for round ' + cur.round) + ' failed.</strong> ' + esc(cur.error || '') + '</div>' + rerun;
     }
-    const m = cur.meta || {};
-    const chips = [];
-    if (m.recommendation) chips.push('<span class="' + iaRecClass(m.recommendation) + '">' + esc(m.recommendation) + '</span>');
-    if (m.independentScore !== undefined && m.independentScore !== null) chips.push('<span>Independent score ' + esc(m.independentScore) + '/100</span>');
-    if (m.clarity) chips.push('<span>Clarity: ' + esc(m.clarity) + '</span>');
-    if (m.defensibility) chips.push('<span>Defensibility: ' + esc(m.defensibility) + '</span>');
-    if (m.confidence) chips.push('<span>Confidence: ' + esc(m.confidence) + '</span>');
-    h += '<div class="ia-box">';
-    h += chips.length ? '<div class="ia-meta">' + chips.join('') + '</div>' : '';
-    if (m.estimatedRecovery) h += '<div style="font-size:12.5px; margin-bottom:4px;"><strong>Estimated recovery:</strong> ' + esc(m.estimatedRecovery) + '</div>';
-    if (m.topRisk) h += '<div style="font-size:12.5px; margin-bottom:8px;"><strong>Top risk:</strong> ' + esc(m.topRisk) + '</div>';
-    h += '<div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px;">' +
-        (cur.fileId ? '<a class="btn-light" style="text-decoration:none; padding:5px 12px; font-size:12px;" href="' + US.authedUrl(API + '/files/' + cur.fileId) + '" target="_blank" rel="noopener">Download Word file</a>' : '') +
-        rerun +
-        '<span class="id">Round ' + cur.round + ' · ' + fmtDateTime(cur.completedAt) + (cur.model ? ' · ' + esc(cur.model) : '') + '</span></div>';
-    if (cur.delivery) h += '<div class="id" style="margin-bottom:8px;">Emailed: ' + esc(cur.delivery) + '</div>';
-    h += iaInputsHtml(cur.inputs);
-    h += iaCostHtml(cur, d);
-    h += '<details open><summary style="cursor:pointer; font-weight:600; color:var(--navy); font-size:12.5px;">Full analysis</summary><div class="ia" style="margin-top:8px;">' + (cur.html || '') + '</div></details>';
-    if ((cur.sources || []).length) {
-        h += '<details style="margin-top:8px;"><summary style="cursor:pointer; font-size:12.5px; color:var(--navy);">Web pages consulted (' + cur.sources.length + ')</summary><ul style="font-size:12px; margin:6px 0 0 18px;">' +
-            cur.sources.map(x => '<li><a href="' + esc(x.url) + '" target="_blank" rel="noopener">' + esc(x.title || x.url) + '</a></li>').join('') + '</ul></details>';
-    }
-    h += '</div>';
-    const older = list.slice(1).filter(a => a.status === 'done');
-    if (older.length) {
-        h += '<details style="margin-top:8px;"><summary style="cursor:pointer; font-size:12.5px; color:var(--navy);">Earlier analyses (' + older.length + ')</summary>' +
-            older.map(a => '<div style="margin:10px 0; padding-top:8px; border-top:1px solid var(--line);"><div class="id">Round ' + a.round + ' · ' + fmtDateTime(a.completedAt) +
-                (a.meta && a.meta.recommendation ? ' · ' + esc(a.meta.recommendation) : '') +
-                (a.fileId ? ' · <a href="' + US.authedUrl(API + '/files/' + a.fileId) + '" target="_blank" rel="noopener">Word</a>' : '') + '</div><div class="ia">' + (a.html || '') + '</div></div>').join('') + '</details>';
-    }
+    h += analysisBodyHtml(cur, d, { rerun });
+    if (list.length > 1) h += '<div class="id" style="margin-top:8px;">Earlier runs are kept: pick an earlier version at the top of this panel to see them exactly as they were.</div>';
     return h;
+}
+
+// ---------- versions ----------
+function loadVersions(id) {
+    return fetch(API + '/submissions/' + encodeURIComponent(id) + '/versions')
+        .then(r => (/json/.test(r.headers.get('content-type') || '')) ? r.json() : { error: 'Versions need the updated API (case-versions.js).' })
+        .then(d => {
+            if (!selected || selected.SubmissionId !== id) return;
+            if (d.error) { VERS = { error: d.error, versions: [], current: 0 }; paintVbar(); return; }
+            const wasCurrent = !VERS || VSEL === null || VSEL === VERS.current;
+            VERS = d;
+            if (wasCurrent) VSEL = d.current;
+            paintVbar();
+        })
+        .catch(err => { VERS = { error: err.message, versions: [], current: 0 }; paintVbar(); });
+}
+
+function isOldVersion() { return VERS && VSEL !== null && VSEL !== VERS.current; }
+
+function paintVbar() {
+    const w = document.getElementById('vWrap');
+    if (!w || !selected) return;
+    const id = selected.SubmissionId;
+    const zip = document.getElementById('zipLink');
+    if (!VERS) { w.innerHTML = '<div class="vbar"><span class="spin"></span> Loading versions…</div>'; return; }
+    if (VERS.error) { w.innerHTML = '<div class="vbar" style="color:#b3261e;">' + esc(VERS.error) + '</div>'; return; }
+    const opts = VERS.versions.map(v => '<option value="' + v.version + '"' + (v.version === VSEL ? ' selected' : '') + '>Version ' + v.version +
+        (v.version === VERS.current ? ' (current)' : '') + ' — ' + esc(v.kindLabel) + ' · ' + fmtDateTime(v.createdAt) + (v.actor ? ' · ' + esc(v.actor) : '') + '</option>').join('');
+    const cur = VERS.versions.find(v => v.version === VSEL) || {};
+    w.innerHTML = '<div class="vbar"><strong>Version</strong> <select onchange="selectVersion(Number(this.value))">' + opts + '</select>' +
+        (isOldVersion() ? '<span class="old">Viewing an earlier version (read-only)</span> <button class="btn-light" style="padding:3px 10px; font-size:12px;" onclick="selectVersion(' + VERS.current + ')">Back to current</button>' : '') +
+        (cur.note ? '<span class="id" style="flex-basis:100%;">' + esc(cur.note) + '</span>' : '') + '</div>';
+    if (zip && VSEL) { zip.href = US.authedUrl(API + '/submissions/' + encodeURIComponent(id) + '/versions/' + VSEL + '/zip'); zip.textContent = 'Download version ' + VSEL + ' (ZIP)'; }
+    document.getElementById('resendBtn').textContent = VSEL ? 'Re-send email (v' + VSEL + ')' : 'Re-send email';
+    const save = document.getElementById('saveBtn');
+    save.disabled = isOldVersion() || !!(selected && selected.DeletedAt);
+    save.title = isOldVersion() ? 'Switch back to the current version to make changes' : '';
+}
+
+function selectVersion(v) {
+    if (!selected || !VERS) return;
+    VSEL = v;
+    if (!isOldVersion()) { VDETAIL = null; renderDetail(); return; }
+    const id = selected.SubmissionId;
+    document.getElementById('dBody').innerHTML = '<div id="vWrap"></div><div class="empty">Loading version ' + v + '…</div>';
+    paintVbar();
+    fetch(API + '/submissions/' + encodeURIComponent(id) + '/versions/' + v)
+        .then(r => r.json())
+        .then(d => { if (d.error) throw new Error(d.error); if (VSEL !== v) return; VDETAIL = d; renderVersionView(); })
+        .catch(err => { document.getElementById('dBody').innerHTML = '<div id="vWrap"></div><div class="banner err">Could not load version ' + v + ': ' + esc(err.message) + '</div>'; paintVbar(); });
+}
+
+// An earlier version, exactly as it was saved.
+function renderVersionView() {
+    const d = VDETAIL;
+    const s = d.snapshot || {};
+    const c = s.case || {};
+    let h = '<div id="vWrap"></div>';
+    h += '<div class="banner warn">Version ' + d.version + ' of ' + d.current + ' — ' + esc(d.kindLabel) + ', ' + fmtDateTime(d.createdAt) + (d.actor ? ' by ' + esc(d.actor) : '') +
+        '. Read-only. Download and Re-send email use this version.</div>';
+    h += '<h3>Management (as of version ' + d.version + ')</h3><dl class="kv">' +
+        kv('Status', c.status || '—') + kv('Priority', c.priority || 'Normal') + kv('Assigned to', c.assigned_to || '—') +
+        kv('Next action date', c.due_date ? String(c.due_date).slice(0, 10) : '—') + kv('UtiliSave Internal Issue ID', c.case_id || '—') +
+        kv('Utility Case ID', c.utility_case_id || '—') + kv('Internal notes', c.admin_notes || '—') +
+        kv('Letter for the redline', s.letterFileName || 'none chosen') + '</dl>';
+    h += '<h3>Issue analysis in this version</h3>';
+    h += d.analysis ? analysisBodyHtml(d.analysis, {}, {}) : '<div class="empty">No analysis belonged to this version.</div>';
+    const files = s.files || [];
+    h += '<h3>Attachments in this version (' + files.length + ')</h3>';
+    h += files.length ? '<div class="filelist">' + files.map(f =>
+        '<a href="' + US.authedUrl(API + '/files/' + f.id) + '" target="_blank" rel="noopener">' + (f.id === s.letterFileId ? '<strong>[letter]</strong> ' : '') + esc(f.name) +
+        ' <span class="id">(' + Math.max(1, Math.round((f.size || 0) / 1024)) + ' KB · ' + esc(f.category) + ' · round ' + f.round + ')</span></a>').join('') + '</div>'
+        : '<div class="empty">No files.</div>';
+    document.getElementById('dBody').innerHTML = h;
+    paintVbar();
 }
 
 // How each attachment reached Claude. Anything NOT READ is shown in red, with the reason.
@@ -797,21 +1064,58 @@ function iaCostHtml(cur, d) {
 
 function runIssueAnalysis(force) {
     if (!selected) return;
+    if (!letterId()) { openLetterModal(force); return; }
+    startRun(force);
+}
+
+function startRun(force) {
     const id = selected.SubmissionId;
-    if (force && !confirm('Run the issue analysis again for this case?\n\nIt takes 1–3 minutes, is a paid Claude API call, and emails the new result to internalaudit@ and the auditor.')) return;
+    const next = VERS && VERS.current ? VERS.current + 1 : null;
+    if (force && !confirm('Run the issue analysis again for this case?\n\nIt takes about 3–8 minutes plus 1–3 for the redline, is a paid Claude API call, and emails the new result to internalaudit@ and the auditor.' +
+        (next ? '\n\nThe case as it stands stays as version ' + VERS.current + '; the new result becomes version ' + next + '.' : ''))) return;
     fetch(API + '/submissions/' + encodeURIComponent(id) + '/issue-analysis', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ force: !!force })
     })
         .then(r => r.json())
-        .then(res => { if (res.error) throw new Error(res.error); loadIssueAnalysis(id); })
+        .then(res => { if (res.error) throw new Error(res.error); loadIssueAnalysis(id); loadVersions(id); })
         .catch(err => { detail.issueAnalysis = { error: 'Could not start the analysis: ' + err.message }; paintIssueAnalysis(); });
+}
+
+let LM_FORCE = false;
+function openLetterModal(force) {
+    LM_FORCE = !!force;
+    document.getElementById('lmBody').innerHTML = letterChooserHtml('modal');
+    document.getElementById('lmMsg').textContent = '';
+    document.getElementById('letterModal').classList.add('open');
+    document.getElementById('letterScrim').classList.add('open');
+}
+function closeLetterModal() {
+    document.getElementById('letterModal').classList.remove('open');
+    document.getElementById('letterScrim').classList.remove('open');
+}
+function letterModalRun(withLetter) {
+    if (!withLetter) { closeLetterModal(); startRun(LM_FORCE); return; }
+    const picked = document.querySelector('input[name="lf_modal"]:checked');
+    if (!picked) { document.getElementById('lmMsg').textContent = 'Check the letter first, or add it.'; return; }
+    setLetter(Number(picked.value)).then(() => { closeLetterModal(); startRun(LM_FORCE); }).catch(() => {});
+}
+
+function makeRedline() {
+    if (!selected) return;
+    const id = selected.SubmissionId;
+    if (!confirm('Make the redline of the chosen letter against the latest analysis?\n\nAbout 1–3 minutes; a small paid Claude API call. The analysis is not re-run. The result becomes the next version. It is not emailed automatically: use Re-send email to send it.')) return;
+    fetch(API + '/submissions/' + encodeURIComponent(id) + '/redline', { method: 'POST' })
+        .then(r => r.json())
+        .then(res => { if (res.error) throw new Error(res.error); loadIssueAnalysis(id); })
+        .catch(err => alert('Could not make the redline: ' + err.message));
 }
 
 function closeDrawer() {
     if (iaTimer) { clearTimeout(iaTimer); iaTimer = null; }
     document.getElementById('drawer').classList.remove('open');
     document.getElementById('scrim').classList.remove('open');
-    selected = null; detail = null;
+    selected = null; detail = null; VERS = null; VSEL = null; VDETAIL = null;
+    closeLetterModal();
     render();
 }
 
@@ -845,7 +1149,11 @@ function renderDetail() {
     const statuses = ['Under Review', 'Submitted to UtiliSave', 'Approved for Filing', 'Submitted to Utility',
                       'Awaiting Utility Response', 'Adjusted', 'Rejected', 'Under Appeal', 'Closed'];
 
-    let html = '';
+    let html = '<div id="vWrap"></div>';
+    if (r.DeletedAt) {
+        html += '<div class="banner warn">This case is in <strong>Deleted cases</strong> (deleted ' + fmtDateTime(r.DeletedAt) + (r.DeletedBy ? ' by ' + esc(r.DeletedBy) : '') +
+            (r.DeletedReason ? ': ' + esc(r.DeletedReason) : '') + '). Nothing was erased. <button class="btn-light" style="padding:3px 10px; font-size:12px;" onclick="restoreCase(\'' + esc(r.SubmissionId) + '\')">Restore</button></div>';
+    }
 
     html += '<div id="iaWrap">' + renderIssueAnalysis() + '</div>';
 
@@ -993,6 +1301,7 @@ function renderDetail() {
         : '<div class="empty">Nothing recorded yet. Changes you save here appear in this trail.</div>';
 
     document.getElementById('dBody').innerHTML = html;
+    paintVbar();
 }
 
 // ---------- write ----------
@@ -1031,10 +1340,13 @@ function saveManagement() {
             return fetch(API + '/?action=list').then(r => r.json()).then(d => {
                 ALL = d.submissions || [];
                 fillFilterOptions();
+                VERS = null; VSEL = null;
                 openDetail(id);
                 const m = document.getElementById('saveMsg');
                 m.style.color = '#1c5c31';
-                m.textContent = 'Saved.';
+                m.textContent = res.version
+                    ? (res.unchanged ? 'Nothing changed, so no new version: still version ' + res.version + '.' : 'Saved as version ' + res.version + '.')
+                    : 'Saved.';
             });
         })
         .catch(err => {
@@ -1044,20 +1356,19 @@ function saveManagement() {
         .then(() => { btn.disabled = false; });
 }
 
-function resendNotify() {
-    if (!selected) return;
+// Emails internalaudit@ the complete file set of the version on screen:
+// summary, analysis (with the redline at the end), the redline, every attachment.
+function resendCaseFile() {
+    if (!selected || !VSEL) return;
     const msg = document.getElementById('saveMsg');
     msg.style.color = 'var(--muted)';
-    msg.textContent = 'Sending…';
-    fetch(API + '/notify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ submissionId: selected.SubmissionId })
-    })
+    msg.textContent = 'Sending version ' + VSEL + '…';
+    fetch(API + '/submissions/' + encodeURIComponent(selected.SubmissionId) + '/versions/' + VSEL + '/email', { method: 'POST' })
         .then(r => r.json())
         .then(res => {
+            if (res.error) throw new Error(res.error);
             msg.style.color = res.sent ? '#1c5c31' : '#b3261e';
-            msg.textContent = res.sent ? ('Emailed ' + (res.to || 'management') + '.') : ('Not sent: ' + (res.reason || 'unknown reason'));
+            msg.textContent = res.sent ? ('Version ' + VSEL + ' emailed to ' + res.to + ' — ' + res.mode + '.') : ('Not sent: ' + (res.reason || 'unknown reason'));
         })
         .catch(err => { msg.style.color = '#b3261e'; msg.textContent = 'Not sent: ' + err.message; });
 }

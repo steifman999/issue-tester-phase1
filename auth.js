@@ -131,6 +131,9 @@
         '#us-chip button{font-family:inherit;font-size:11.5px;border:1px solid #e3e8ee;background:#f7f9fc;',
         '  color:#0B3E76;border-radius:14px;padding:5px 11px;cursor:pointer;}',
         '#us-chip button:hover{background:#eef4fb;}',
+        // Pages with a header slot (id="us-chip-slot") get the chip in the header,
+        // so it never sits on top of buttons at the bottom of the page.
+        '#us-chip.inline{position:static;box-shadow:none;border-color:rgba(255,255,255,.35);padding:4px 6px 4px 12px;}',
         // The gate lives inside <body>, and the page-hiding rule below sets
         // visibility:hidden on <body> — which inherits. Without this the login
         // screen is present in the DOM but invisible, which looks exactly like
@@ -381,7 +384,9 @@
         chip.appendChild(who);
         chip.appendChild(pw);
         chip.appendChild(out);
-        document.body.appendChild(chip);
+        var slot = el('us-chip-slot');
+        if (slot) { chip.className = 'inline'; slot.appendChild(chip); }
+        else document.body.appendChild(chip);
     }
 
     // Everything is in order — reveal the page and let it load its data.

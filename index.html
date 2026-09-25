@@ -1679,9 +1679,23 @@
                         ((cur.inputs || []).some(x => !x.read) ? '<div style="margin:6px 0 8px; padding:8px 10px; background:#fff3cd; border-radius:6px; color:#7a5c00; font-size:12.5px;"><strong>Some attachments could not be read, so the analysis did not see them:</strong><ul style="margin:4px 0 0 18px;">' +
                             cur.inputs.filter(x => !x.read).map(x => '<li><strong>' + iaEsc(x.file) + '</strong>: ' + iaEsc(x.how.replace(/^NOT READ — /, '')) + '</li>').join('') + '</ul></div>' : '') +
                         (cur.fileId ? '<div style="margin-bottom:8px;"><a href="' + US.authedUrl(APPS_SCRIPT_URL + '/files/' + cur.fileId) + '" target="_blank" rel="noopener">Download the analysis as a Word file</a> · <span style="color:#6b7785; font-size:12px;">round ' + cur.round + ', ' + new Date(cur.completedAt).toLocaleString() + '</span></div>' : '') +
-                        '<details open><summary style="cursor:pointer; font-weight:600; color:#0B3E76;">Full analysis</summary><div style="margin-top:8px;">' + (cur.html || '') + '</div></details>';
+                        (cur.redlineFileId ? '<div style="margin-bottom:8px;"><a href="' + US.authedUrl(APPS_SCRIPT_URL + '/files/' + cur.redlineFileId) + '" target="_blank" rel="noopener">Download the redlined letter as a Word file</a></div>' : '') +
+                        '<details open><summary style="cursor:pointer; font-weight:600; color:#0B3E76;">Full analysis</summary><div style="margin-top:8px;">' + (cur.html || '') + '</div></details>' +
+                        iaRedline(cur.redline);
                 })
                 .catch(() => { el.style.display = 'none'; });
+        }
+
+        // The redlined letter at the end of the analysis. The API sends it
+        // already limited to <p>, <ins> and <del>.
+        function iaRedline(rl) {
+            if (!rl) return '';
+            let h = '<div style="margin-top:14px; padding-top:10px; border-top:2px solid #e3e8ee;"><div style="font-weight:600; color:#0B3E76; margin-bottom:6px;">Redlined letter</div>';
+            if (rl.status !== 'done') return h + '<div style="color:#7a5c00; font-size:12.5px;">' + (rl.status === 'no_letter'
+                ? 'Pending: UtiliSave has not yet chosen which file is the letter to redline.' : 'Not produced: ' + iaEsc(rl.error || '')) + '</div></div>';
+            return h + '<div style="font-size:12px; color:#6b7785; margin-bottom:6px;">Baseline: ' + iaEsc(rl.sourceName || '') +
+                ' · <ins style="color:#1e7e34;">inserted</ins> · <del style="color:#cc0000;">deleted</del></div>' +
+                '<div style="font-size:13px; line-height:1.6;">' + String(rl.html || '').replace(/<ins>/g, '<ins style="color:#1e7e34;">').replace(/<del>/g, '<del style="color:#cc0000;">') + '</div></div>';
         }
 
         function setSubmitStatus(html, kind) {
