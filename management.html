@@ -328,10 +328,11 @@
             <select id="fAuditor" onchange="render()"><option value="">All auditors</option></select>
             <select id="fPriority" onchange="render()"><option value="">All priorities</option><option>High</option><option>Normal</option><option>Low</option></select>
             <select id="fScore" onchange="render()">
-                <option value="">Any score</option>
-                <option value="none">Not scored</option>
-                <option value="lt75">Below 75 (CEO approval)</option>
-                <option value="gte75">75 and above</option>
+                <option value="">Any rating</option>
+                <option value="none">Not rated yet</option>
+                <option value="ceo">CEO approval required</option>
+                <option value="pursue">Pursue</option>
+                <option value="strengthen">Strengthen, then re-rate</option>
             </select>
             <div class="spacer"></div>
             <span id="count" style="font-size:12px; color:var(--muted);"></span>
@@ -489,7 +490,8 @@ function statusPill(s) { return '<span class="pill ' + statusClass(s) + '">' + e
 function scoreCell(v) {
     if (v === null || v === undefined) return '<span class="id">—</span>';
     const n = Number(v);
-    const cls = n >= 80 ? 'good' : (n >= 75 ? 'mid' : 'bad');
+    // v14: the Final Rating (Base Judgment Methodology). 66+ meets the pursue line; under 50 needs CEO approval.
+    const cls = n >= 66 ? 'good' : (n >= 50 ? 'mid' : 'bad');
     return '<span class="score ' + cls + '">' + n + '</span>';
 }
 function isOverdue(v) { return !!v && new Date(v) < new Date(new Date().toDateString()); }
@@ -510,7 +512,7 @@ const COLUMNS = [
     { key: 'IssueType',    label: 'Issue type',  render: r => esc(r.IssueType || '') },
     { key: 'AuditorName',  label: 'Auditor',     render: r => esc(r.AuditorName || '') },
     { key: 'Total',        label: 'At stake',    cls: 'num', render: r => '<strong>' + money(total(r)) + '</strong><div class="id">' + money(r.FinancialImpactRefund) + ' + ' + money(r.FinancialImpactFuture) + '</div>' },
-    { key: 'LatestScore',  label: 'Score',       cls: 'num', render: r => scoreCell(r.LatestScore) },
+    { key: 'LatestScore',  label: 'Rating',      cls: 'num', render: r => scoreCell(r.LatestScore) + (r.LikelihoodUtility !== null && r.LikelihoodUtility !== undefined ? '<div class="id" title="Likelihood at the utility">' + esc(r.LikelihoodUtility) + '%</div>' : '') + (r.RatingMethod && !/Base Judgment/i.test(r.RatingMethod) ? '<div class="id" title="Rated before the Base Judgment Methodology was adopted">old rubric</div>' : '') },
     { key: 'Status',       label: 'Status',      render: r => statusPill(r.Status) + (r.LatestRound > 1 ? ' <span class="pill appeal">Round ' + r.LatestRound + '</span>' : '') },
     { key: 'Priority',     label: 'Priority',    render: r => '<span class="pri ' + esc(r.Priority || 'Normal') + '">' + esc(r.Priority || 'Normal') + '</span>' },
     { key: 'AssignedTo',   label: 'Owner',       render: r => esc(r.AssignedTo || '—') },
@@ -627,7 +629,7 @@ function renderKpis() {
     const atUtility = ALL.filter(r => /utility/i.test(r.Status || ''));
     const rejected = ALL.filter(r => /reject|denied/i.test(r.Status || ''));
     const won = ALL.filter(r => /adjust|approved|paid/i.test(r.Status || ''));
-    const below = ALL.filter(r => r.LatestScore !== null && r.LatestScore !== undefined && Number(r.LatestScore) < 75);
+    const below = ALL.filter(r => r.CeoApprovalRequired === true);
     const unassigned = ALL.filter(r => !r.AssignedTo);
     const overdue = ALL.filter(r => isOverdue(r.DueDate));
 
@@ -637,7 +639,7 @@ function renderKpis() {
         { id: 'utility',    label: 'With the utility', value: atUtility.length,  foot: 'awaiting a response' },
         { id: 'won',        label: 'Adjusted / won',   value: won.length,        foot: money(won.reduce((s, r) => s + total(r), 0)) + ' recovered' },
         { id: 'rejected',   label: 'Rejected',         value: rejected.length,   foot: 'appeal candidates' },
-        { id: 'below',      label: 'Score below 75',   value: below.length,      foot: 'CEO approval required', alert: below.length > 0 },
+        { id: 'below',      label: 'CEO approval',     value: below.length,      foot: 'rating < 50 or likelihood < 50%', alert: below.length > 0 },
         { id: 'unassigned', label: 'Unassigned',       value: unassigned.length, foot: 'no owner set', alert: unassigned.length > 0 },
         { id: 'overdue',    label: 'Past next date',   value: overdue.length,    foot: 'follow-up overdue', alert: overdue.length > 0 }
     ];
@@ -658,7 +660,7 @@ function passesKpi(r) {
         case 'utility':    return /utility/i.test(r.Status || '');
         case 'won':        return /adjust|approved|paid/i.test(r.Status || '');
         case 'rejected':   return /reject|denied/i.test(r.Status || '');
-        case 'below':      return r.LatestScore !== null && r.LatestScore !== undefined && Number(r.LatestScore) < 75;
+        case 'below':      return r.CeoApprovalRequired === true;
         case 'unassigned': return !r.AssignedTo;
         case 'overdue':    return isOverdue(r.DueDate);
         default:           return true;
@@ -685,8 +687,9 @@ function render() {
         if (fp && (r.Priority || 'Normal') !== fp) return false;
         const scored = r.LatestScore !== null && r.LatestScore !== undefined;
         if (fsc === 'none' && scored) return false;
-        if (fsc === 'lt75' && !(scored && Number(r.LatestScore) < 75)) return false;
-        if (fsc === 'gte75' && !(scored && Number(r.LatestScore) >= 75)) return false;
+        if (fsc === 'ceo' && r.CeoApprovalRequired !== true) return false;
+        if (fsc === 'pursue' && !/^pursue/i.test(r.DecisionRule || '')) return false;
+        if (fsc === 'strengthen' && !/^strengthen/i.test(r.DecisionRule || '')) return false;
         if (q) {
             const hay = [r.SubmissionId, r.CaseID, r.UtilityCaseID, r.CustomerName, r.AccountNumber,
                          r.AuditorName, r.UtilityName, r.UtilityType, r.IssueType, r.Status,
@@ -869,9 +872,9 @@ function paintIssueAnalysis() {
 
 function iaRecClass(rec) {
     rec = String(rec || '').toLowerCase();
-    if (rec.indexOf('submit now') === 0) return 'rec-submit';
+    if (rec.indexOf('submit now') === 0 || rec.indexOf('pursue') === 0) return 'rec-submit';
     if (rec.indexOf('strengthen') === 0) return 'rec-strengthen';
-    if (rec.indexOf('hold') === 0) return 'rec-hold';
+    if (rec.indexOf('hold') === 0 || rec.indexOf('ceo') === 0 || rec.indexOf('below') === 0) return 'rec-hold';
     return '';
 }
 
@@ -962,11 +965,12 @@ function analysisBodyHtml(cur, d, opts) {
     const m = cur.meta || {};
     const chips = [];
     if (m.recommendation) chips.push('<span class="' + iaRecClass(m.recommendation) + '">' + esc(m.recommendation) + '</span>');
-    if (m.independentScore !== undefined && m.independentScore !== null) chips.push('<span>Independent score ' + esc(m.independentScore) + '/100</span>');
+    if (m.independentScore !== undefined && m.independentScore !== null) chips.push('<span>' + (m.bjm ? 'Final Rating ' : 'Old rubric score ') + esc(m.independentScore) + '/100' + (m.finalWithRedline !== null && m.finalWithRedline !== undefined ? ' (' + esc(m.finalWithRedline) + ' with the redline)' : '') + '</span>');
+    if (m.bjm && m.bjm.P) chips.push('<span>Votes: U ' + esc(m.bjm.P.U) + ' · J ' + esc(m.bjm.P.J) + ' · A ' + esc(m.bjm.P.A) + '</span>');
     if (m.clarity) chips.push('<span>Clarity: ' + esc(m.clarity) + '</span>');
     if (m.defensibility) chips.push('<span>Defensibility: ' + esc(m.defensibility) + '</span>');
     if (m.confidence) chips.push('<span>Confidence: ' + esc(m.confidence) + '</span>');
-    if (m.likelihoodPct !== undefined && m.likelihoodPct !== null && m.likelihoodPct !== '') chips.push('<span>Likelihood: ' + esc(m.likelihoodPct) + '%</span>');
+    if (m.likelihoodPct !== undefined && m.likelihoodPct !== null && m.likelihoodPct !== '') chips.push('<span>Likelihood' + (m.bjm ? ' at the utility' : '') + ': ' + esc(m.likelihoodPct) + '%</span>');
     const flags = m.integrity || [];
     if (m.integrity) chips.push('<span style="' + (flags.length ? 'background:#fdecea; color:#9b2620;' : 'background:#e6f4ea; color:#1c5c31;') + '">' +
         (flags.length ? flags.length + ' integrity flag' + (flags.length > 1 ? 's' : '') : 'Integrity checks passed') + '</span>');
@@ -1272,13 +1276,13 @@ function renderDetail() {
             const issues = v.Issues || [];
             const suggestions = v.Suggestions || [];
             let block = '<div class="tl"><strong>Round ' + v.VersionNumber + '</strong> ' + statusPill(v.Status) +
-                ' &nbsp;score ' + (v.Score === null || v.Score === undefined ? '—' : v.Score) +
+                (v.Score === null || v.Score === undefined ? '' : ' &nbsp;<span class="id" title="The form keyword score, retired 2026-09-28">old form score ' + v.Score + '</span>') +
                 '<div class="when">' + fmtDateTime(v.Timestamp) + (v.AuditorName ? ' · ' + esc(v.AuditorName) : '') + '</div>' +
                 (v.OutcomeReason ? '<div style="margin-top:5px; color:#7d211a;">Outcome: ' + esc(v.OutcomeReason) + '</div>' : '') +
                 (v.AuditorNotes ? '<div style="margin-top:4px;">' + esc(v.AuditorNotes) + '</div>' : '');
 
             if (breakdown.length) {
-                block += '<div style="margin-top:8px; font-size:12px;"><strong>Score breakdown:</strong><table style="margin-top:4px; width:100%; font-size:12px;">' +
+                block += '<div style="margin-top:8px; font-size:12px;"><strong>Form completeness check:</strong><table style="margin-top:4px; width:100%; font-size:12px;">' +
                     breakdown.map(b => '<tr><td style="padding:2px 8px 2px 0; color:#333;">' + esc(b.title) + '</td>' +
                         '<td style="padding:2px 8px; color:#666;">' + esc(b.score) + ' ' + esc(b.status) + '</td>' +
                         '<td style="padding:2px 0; color:#888;">' + esc(b.description) + '</td></tr>').join('') +
@@ -1932,7 +1936,7 @@ function deleteOption(id) {
 function exportCsv() {
     const cols = ['SubmissionId', 'CaseID', 'UtilityCaseID', 'CustomerName', 'AccountNumber', 'UtilityName',
                   'UtilityType', 'IssueType', 'AuditorName', 'FinancialImpactRefund', 'FinancialImpactFuture',
-                  'LatestScore', 'LatestRound', 'Status', 'Priority', 'AssignedTo', 'DueDate',
+                  'LatestScore', 'FinalWithRedline', 'LikelihoodUtility', 'DecisionRule', 'RatingMethod', 'LatestRound', 'Status', 'Priority', 'AssignedTo', 'DueDate',
                   'VersionCount', 'FileCount', 'CreatedAt', 'UpdatedAt', 'AdminNotes'];
     const csv = [cols.join(',')].concat(VIEW.map(r =>
         cols.map(c => '"' + String(r[c] === null || r[c] === undefined ? '' : r[c]).replace(/"/g, '""') + '"').join(','))).join('\r\n');

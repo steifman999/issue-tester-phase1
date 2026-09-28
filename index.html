@@ -832,7 +832,7 @@
                 <div style="margin-top:18px; padding-top:18px; border-top:1px solid #e3e8ee;">
                     <button type="button" class="btn-primary" id="submitBtn" style="width:100%; background:#0B3E76;" onclick="submitToUtiliSave()">Submit This Issue to UtiliSave</button>
                     <div style="font-size:11.5px; color:#666; margin-top:8px; line-height:1.5;">
-                        Files the issue in the repository, attaches your documents, and notifies UtiliSave management. You can submit with or without running the score first.
+                        Files the issue in the repository, attaches your documents, and notifies UtiliSave management. You can submit with or without running the completeness check first. The rating comes from the issue analysis.
                     </div>
                     <div id="submitStatus" style="display:none; margin-top:12px; padding:12px; border-radius:6px; font-size:13px; line-height:1.55;"></div>
                     <div id="iaPanel" class="ia-panel" style="display:none;"></div>
@@ -846,12 +846,12 @@
             <div class="results-container" id="resultsContainer" style="display: none;">
                 <div class="score-display" id="scoreDisplay">
                     <div class="score-number" id="scoreNumber">--</div>
-                    <div class="score-label">Likelihood of Success</div>
-                    <div style="font-size: 11px; color: #888;">Note: issues scoring below 75 should not be submitted without approval from the CEO.</div>
+                    <div class="score-label">Base Judgment rating</div>
+                    <div style="font-size: 11px; color: #888;">The issue analysis rates the case after you submit. CEO approval is required if its Final Rating is under 50 or its likelihood at the utility is under 50%.</div>
                     <div class="score-interpretation" id="scoreInterpretation"></div>
                     <div class="score-potential" id="scorePotential"></div>
                     <div class="ceo-note" id="ceoApprovalNote" style="display:none;"></div>
-                    <button type="button" class="btn-secondary" style="margin-top:14px; font-size:12px; padding:8px 18px;" onclick="activateTab('scoregap'); loadScoreGap();">Why can't this reach 80+?</button>
+                    <button type="button" class="btn-secondary" style="margin-top:14px; font-size:12px; padding:8px 18px;" onclick="activateTab('scoregap'); loadScoreGap();">What would strengthen this case?</button>
                 </div>
 
                 <div class="button-group" style="grid-template-columns: 1fr 1fr; margin-top: 0; margin-bottom: 24px;">
@@ -861,11 +861,11 @@
                 <div id="repoStatus" style="display:none; margin-bottom: 20px; padding: 12px; border-radius: 6px; font-size: 13px;"></div>
 
                 <div class="tabs">
-                    <button class="tab-button active" data-tab="breakdown" onclick="switchTab(event, 'breakdown')">Score Breakdown</button>
+                    <button class="tab-button active" data-tab="breakdown" onclick="switchTab(event, 'breakdown')">Completeness Check</button>
                     <button class="tab-button" data-tab="issues" onclick="switchTab(event, 'issues')">Issues & Gaps</button>
                     <button class="tab-button" data-tab="suggestions" onclick="switchTab(event, 'suggestions')">Suggestions</button>
                     <button class="tab-button" data-tab="checklist" onclick="switchTab(event, 'checklist')">Pre-Submission Checklist</button>
-                    <button class="tab-button" data-tab="scoregap" onclick="switchTab(event, 'scoregap')">Score Gap Analysis</button>
+                    <button class="tab-button" data-tab="scoregap" onclick="switchTab(event, 'scoregap')">Strengthening Ideas</button>
                     <button class="tab-button" data-tab="redline" onclick="switchTab(event, 'redline')">Total Letter with Redlines</button>
                     <button class="tab-button" data-tab="history" onclick="switchTab(event, 'history')">Case History</button>
                 </div>
@@ -899,7 +899,7 @@
                 <!-- Score Gap Analysis Tab -->
                 <div id="scoregap" class="tab-content">
                     <div id="scoregapContent">
-                        <div class="empty-state"><p>Click "Why can't this reach 80+?" above the tabs, or generate it here.</p></div>
+                        <div class="empty-state"><p>Click "What would strengthen this case?" above the tabs, or generate it here.</p></div>
                     </div>
                     <button type="button" class="btn-secondary" style="margin-top: 12px;" onclick="loadScoreGap(true)">Generate / Regenerate</button>
                 </div>
@@ -1352,208 +1352,48 @@
         }
 
         function generateReview(auditorName, customerName, accountNumber, utilityName, utilityType, issueType, financialImpactRefund, financialImpactFuture, submissionText, analysisNotes, skillSuggestion) {
-            // Simulate scoring logic based on content
-            let baseScore = 50;
-            let score = baseScore;
-            let breakdown = [];
-            let issues = [];
-            let suggestions = [];
-
-            // Check for regulatory citations
-            const hasTariff = /tariff|rate schedule|SC9|SC /i.test(submissionText);
-            const hasPSC = /psc|public service|16 NYCRR|case|determination/i.test(submissionText);
-            const hasFinancial = /\$|amount|calculation|refund|billing|period/i.test(submissionText);
-            const hasLogic = /therefore|as a result|because|argues|demonstrates|shows/i.test(submissionText);
-            const hasDetail = submissionText.length > 200 && submissionText.split('\n').length > 3;
-
-            // Regulatory citation
-            if (hasTariff) {
-                baseScore += 12;
-                breakdown.push({
-                    title: 'Regulatory Citations',
-                    score: '12/15',
-                    status: '✓ Good',
-                    description: 'Tariff section cited. Consider adding specific PSC regulation reference (16 NYCRR).'
-                });
-            } else {
-                baseScore -= 8;
-                breakdown.push({
-                    title: 'Regulatory Citations',
-                    score: '0/15',
-                    status: '✗ Missing',
-                    description: 'No tariff or regulation cited. This is critical—add specific regulatory basis.'
-                });
-                issues.push({
-                    type: 'CRITICAL',
-                    title: 'No Regulatory Citation',
-                    description: 'Submission lacks citations to tariff section or applicable regulation.',
-                    impact: 'High - Utility will not take seriously without legal basis'
-                });
-                suggestions.push({
-                    priority: 'critical',
-                    title: 'Add Tariff Section Citation',
-                    description: 'Identify and cite the specific tariff section that applies to this issue.',
-                    example: `"As required by [Utility Name] Tariff Section [X.X], the account should be classified as [Rate Class]."`,
-                    impact: '+12 points (50 → 62)',
-                    confidence: 'High'
-                });
-            }
-
-            // Precedent
-            if (hasPSC) {
-                baseScore += 18;
-                breakdown.push({
-                    title: 'Precedent Support',
-                    score: '18/25',
-                    status: '✓ Good',
-                    description: 'PSC case or regulation referenced. Consider adding similar rate determination case.'
-                });
-            } else {
-                baseScore -= 10;
-                breakdown.push({
-                    title: 'Precedent Support',
-                    score: '0/25',
-                    status: '✗ Missing',
-                    description: 'No prior PSC cases cited. This weakens your argument significantly.'
-                });
-                issues.push({
-                    type: 'MAJOR',
-                    title: 'No PSC Precedent',
-                    description: 'Missing citation to prior PSC case with similar issue.',
-                    impact: 'Medium - Without precedent, utility has no obligation to follow your logic'
-                });
-                suggestions.push({
-                    priority: 'major',
-                    title: 'Add PSC Case Citation',
-                    description: 'Search PSC database for similar rate classification or billing error cases.',
-                    example: `"As established in PSC Case [Number], retroactive rate corrections are appropriate when..."`,
-                    impact: '+15-20 points (depends on case relevance)',
-                    confidence: 'High'
-                });
-            }
-
-            // Financial documentation
-            if (hasFinancial) {
-                baseScore += 7;
-                breakdown.push({
-                    title: 'Financial Documentation',
-                    score: '7/10',
-                    status: '✓ Good',
-                    description: 'Dollar amount and billing periods mentioned. Ensure calculation is explicit.'
-                });
-            } else {
-                baseScore -= 8;
-                breakdown.push({
-                    title: 'Financial Documentation',
-                    score: '0/10',
-                    status: '✗ Missing',
-                    description: 'No clear financial impact calculation shown.'
-                });
-                issues.push({
-                    type: 'CRITICAL',
-                    title: 'Unclear Financial Impact',
-                    description: 'Submission does not clearly state or calculate the dollar amount.',
-                    impact: 'High - Utility needs to know what they\'re being asked to refund'
-                });
-            }
-
-            // Logical argument
-            if (hasLogic) {
-                baseScore += 10;
-                breakdown.push({
-                    title: 'Logical Argument',
-                    score: '10/15',
-                    status: '✓ Partial',
-                    description: 'Logical flow is present. Consider anticipating counterarguments.'
-                });
-            } else {
-                baseScore -= 5;
-                breakdown.push({
-                    title: 'Logical Argument',
-                    score: '5/15',
-                    status: '⚠ Weak',
-                    description: 'Argument structure could be clearer. Add cause-and-effect statements.'
-                });
-            }
-
-            // Detail and specificity
-            if (hasDetail) {
-                baseScore += 8;
-                breakdown.push({
-                    title: 'Detail & Specificity',
-                    score: '8/10',
-                    status: '✓ Good',
-                    description: 'Sufficient detail provided. Add account setup dates and payment timeline if relevant.'
-                });
-            } else {
-                baseScore -= 5;
-                breakdown.push({
-                    title: 'Detail & Specificity',
-                    score: '5/10',
-                    status: '⚠ Needs Work',
-                    description: 'More detail needed. Include dates, account history, timeline.'
-                });
-            }
-
-            // Cap score at 100, floor at 1
-            score = Math.max(1, Math.min(100, baseScore));
-
-            // Get interpretation
-            let interpretation = '';
-            let potentialScore = score + 25; // Potential if all suggestions accepted
-            potentialScore = Math.min(100, potentialScore);
-
-            if (score >= 85) {
-                interpretation = 'Strong case. Most key elements present. High conviction.';
-            } else if (score >= 70) {
-                interpretation = 'Solid case. Main elements present but some gaps. Good conviction.';
-            } else if (score >= 55) {
-                interpretation = 'Borderline case. Several gaps or weak sources. Proceed with caution.';
-            } else if (score >= 40) {
-                interpretation = 'Weak case. Major elements missing. Not recommended unless strategic value.';
-            } else {
-                interpretation = 'Very weak case. Multiple critical gaps. Should not submit without major revision.';
-            }
-
-            // Add general improvement suggestions
-            if (score < 80) {
-                suggestions.push({
-                    priority: 'improvement',
-                    title: 'Review for Logical Gaps',
-                    description: 'Add transitional sentences explaining cause-and-effect between problem and solution.',
-                    example: `"Because [problem], the account [error]. Therefore, [relief requested]."`,
-                    impact: '+8 points',
-                    confidence: 'Medium'
-                });
-            }
-
-            // Generate checklist
-            let checklistItems = [
-                {
-                    title: 'Cite specific tariff section',
-                    reason: 'Foundation of legal argument',
-                    status: hasTariff ? 'Found' : 'Missing'
-                },
-                {
-                    title: 'Cite prior PSC case',
-                    reason: 'Demonstrates precedent support',
-                    status: hasPSC ? 'Found' : 'Missing'
-                },
-                {
-                    title: 'State specific relief requested',
-                    reason: 'Utility must know exactly what you want',
-                    status: /refund|change|adjust|correction|relief/i.test(submissionText) ? 'Found' : 'Missing'
-                },
-                {
-                    title: 'Verify account eligibility',
-                    reason: 'Don\'t argue eligibility for something ineligible',
-                    status: /establish|eligible|qualified|classification/i.test(submissionText) ? 'Found' : 'Missing'
-                },
-                {
-                    title: 'Customer authorization on file',
-                    reason: 'Required before final submission',
-                    status: 'Required at submission'
+            // v14 (2026-09-28): the keyword score is retired. Michael adopted the Base Judgment
+            // Methodology, which rates cases only in the issue analysis (three independent reviewers,
+            // explicit point charts). This is a COMPLETENESS CHECK: it gives no points and no score.
+            const score = null;
+            const t = String(submissionText || '');
+            const breakdown = [], issues = [], suggestions = [];
+            const check = (title, ok, whyMissing, chartLine, fix) => {
+                breakdown.push({ title, score: '', status: ok ? '✓ Present' : '✗ Not found', description: ok ? 'Found in the draft.' : whyMissing });
+                if (!ok) {
+                    issues.push({ type: 'MAJOR', title: title + ' not found', description: whyMissing, impact: 'Counts in the analysis under ' + chartLine });
+                    suggestions.push({ priority: 'major', title: fix.title, description: fix.description, example: fix.example || '', impact: 'Analysis chart line ' + chartLine + ' (the analysis computes the effect)', confidence: 'Completeness check only' });
                 }
+            };
+            check('Governing tariff provision, quoted', /tariff|leaf|rule\s+\d|service classification|rate schedule|SC\s?\d/i.test(t) && /"[^"]{15,}"|“[^”]{15,}”/.test(t),
+                'The draft should quote the operative words of the governing tariff provision, in the version in force for the claim period.', 'M R1-R2',
+                { title: 'Quote the governing provision', description: 'Quote its operative words (e.g. "will be billed") with the leaf, revision and effective dates.' });
+            check('Claim period and account facts', /\b(19|20)\d{2}\b/.test(t) && /account/i.test(t),
+                'State the accounts and the period for each, from a record (bills, schedules).', 'M F1',
+                { title: 'State the facts from the record', description: 'For each account: the period, the meters and the facts the rule needs, with the record that shows them.' });
+            check('Relief stated precisely', /rebill|refund|credit|adjust|correct/i.test(t),
+                'Say exactly what the utility should do, for which accounts and periods.', 'Q Q12',
+                { title: 'State the relief', description: 'Rebill which accounts, for which periods, credit with interest, by what date.' });
+            check('Records requested from the utility', /(produce|provide|furnish|identify)\b[^.]{0,80}\b(records?|data|dates?|notices?|calculation)/i.test(t),
+                'Ask the utility, item by item, for the records only it holds (dates, meter data, notices, how comparable customers were billed).', 'Q Q5-Q6',
+                { title: 'Itemize a records request', description: 'List each record, the accounts or meters, the period and the form you want it in.' });
+            check('Consumer-protection or most-beneficial rule', /most (beneficial|advantageous)|just and reasonable|§\s*65|16 NYCRR/i.test(t),
+                'Check the tariff and NY rules for "most beneficial" or "just and reasonable" language that supports the customer (PSL § 65; 16 NYCRR § 13.2(b)(2)(i); Part 145).', 'M S2-S3, Q Q11',
+                { title: 'Add a consumer-protection source', description: 'The analysis searches for these every time; cite what applies.' });
+            const psc = /\b(PSC|Public Service Commission|DPS|Department of Public Service|OCS|Office of Consumer Services|Part 12|Article 78|informal hearing)\b/i.test(t);
+            breakdown.push({ title: 'No PSC / DPS / OCS reference in the letter', score: '', status: psc ? '✗ Found' : '✓ None', description: psc ? 'Letters never mention or threaten the PSC or any forum. The only reservation line is "The Customer(s) reserve(s) all rights and remedies."' : 'Good.' });
+            if (psc) issues.push({ type: 'CRITICAL', title: 'PSC / forum reference in the letter', description: 'Remove it (Michael\'s policy).', impact: 'Chart Q Q10 (−10)' });
+
+            const interpretation = 'Rating pending the issue analysis. Cases are rated by the Base Judgment Methodology after you submit: a fair utility representative, a PSC judge and the client\'s attorney each decide the case, and the system computes the Final Rating (0–100) and the likelihood at the utility.';
+            const potentialScore = null;
+
+            // Checklist (letters of authorization are assumed provided: base fact B-1)
+            let checklistItems = [
+                { title: 'Quote the governing tariff provision (version in force for the period)', reason: 'Chart M R1-R2', status: breakdown[0].status.indexOf('✓') === 0 ? 'Found' : 'Missing' },
+                { title: 'State the facts from the record', reason: 'Chart M F1', status: breakdown[1].status.indexOf('✓') === 0 ? 'Found' : 'Missing' },
+                { title: 'State the relief precisely', reason: 'Chart Q Q12', status: breakdown[2].status.indexOf('✓') === 0 ? 'Found' : 'Missing' },
+                { title: 'Itemize the records requested from the utility', reason: 'Chart Q Q5-Q6', status: breakdown[3].status.indexOf('✓') === 0 ? 'Found' : 'Missing' },
+                { title: 'Letters of authorization', reason: 'Assumed provided (base fact B-1)', status: 'Assumed provided' }
             ];
 
             // Remember this review so Save to Repository can send it
@@ -1709,7 +1549,7 @@
                         return;
                     }
                     const m = cur.meta || {};
-                    const chips = [m.recommendation, m.independentScore !== undefined ? 'Independent score ' + m.independentScore + '/100' : null,
+                    const chips = [m.recommendation, m.independentScore !== undefined ? (m.bjm ? 'Final Rating ' : 'Old rubric score ') + m.independentScore + '/100' : null,
                                    m.defensibility ? 'Defensibility: ' + m.defensibility : null, m.confidence ? 'Confidence: ' + m.confidence : null,
                                    (m.integrity || []).length ? (m.integrity.length + ' integrity flag(s): see the end of the analysis') : null]
                         .filter(Boolean).map(x => '<span>' + iaEsc(x) + '</span>').join('');
@@ -2009,7 +1849,7 @@
                 'Submission Date: ' + d.submissionDate,
                 'Expected Refund: $' + (d.financialImpactRefund || '0'),
                 'Expected Future Savings: $' + (d.financialImpactFuture || '0'),
-                'Score: ' + (lastReviewData ? lastReviewData.score : 'not run'),
+                'Rating: pending the issue analysis (Base Judgment Methodology)',
                 'Attachments: ' + selectedFiles.length + ' file(s) - NOT included in this email, attach them manually',
                 '',
                 '--- SUBMISSION TEXT ---',
@@ -2205,7 +2045,7 @@
                             <div class="breakdown-item">
                                 <div class="breakdown-header">
                                     <div class="breakdown-title">Round ${v.VersionNumber} — ${new Date(v.Timestamp).toLocaleString()}</div>
-                                    <div class="breakdown-score">Score: ${v.Score != null ? v.Score : '—'}/100</div>
+                                    <div class="breakdown-score">${v.Score != null ? 'Old form score: ' + v.Score + '/100' : 'Rated by the issue analysis'}</div>
                                 </div>
                                 <div class="breakdown-description">${roundBody}</div>
                             </div>
@@ -2375,7 +2215,7 @@
             // The old round's score/AI content no longer applies to the revised
             // argument — clear it so nothing stale lingers until regenerated.
             document.getElementById('resultsContainer').style.display = 'none';
-            document.getElementById('scoregapContent').innerHTML = '<div class="empty-state"><p>Click "Why can\'t this reach 80+?" above the tabs, or generate it here.</p></div>';
+            document.getElementById('scoregapContent').innerHTML = '<div class="empty-state"><p>Click "What would strengthen this case?" above the tabs, or generate it here.</p></div>';
             document.getElementById('researchChecklistContent').innerHTML = '';
             document.getElementById('redlineContent').innerHTML = '<div class="empty-state"><p>Click "Generate Redlined Letter" to draft a fully revised letter — incorporating any research items you\'ve checked above — shown as redlines and downloadable as Word.</p></div>';
             document.getElementById('finalLetterText').value = '';
@@ -2396,23 +2236,17 @@
         }
 
         function renderResults(score, interpretation, potentialScore, breakdown, issues, suggestions, checklistItems) {
-            // Score display
-            document.getElementById('scoreNumber').textContent = score;
+            // v14: no score on the form. The rating comes from the issue analysis (Base Judgment Methodology).
+            document.getElementById('scoreNumber').textContent = score === null || score === undefined ? 'Pending' : score;
             document.getElementById('scoreInterpretation').textContent = interpretation;
-            document.getElementById('scorePotential').textContent = `Potential score with all suggestions: ${potentialScore}/100`;
-
+            document.getElementById('scorePotential').textContent = '';
             const ceoNote = document.getElementById('ceoApprovalNote');
-            if (score < 75) {
-                ceoNote.style.display = 'block';
-                ceoNote.textContent = '⚠ This case scores below 75 — it should not be submitted without approval from the CEO.';
-            } else {
-                ceoNote.style.display = 'none';
-            }
+            ceoNote.style.display = 'none';
 
             // A new review means any previously-generated AI content (from a
             // different case, or a stale version of this one) no longer applies —
             // reset those tabs so nothing stale lingers until regenerated.
-            document.getElementById('scoregapContent').innerHTML = '<div class="empty-state"><p>Click "Why can\'t this reach 80+?" above the tabs, or generate it here.</p></div>';
+            document.getElementById('scoregapContent').innerHTML = '<div class="empty-state"><p>Click "What would strengthen this case?" above the tabs, or generate it here.</p></div>';
             document.getElementById('researchChecklistContent').innerHTML = '';
             document.getElementById('redlineContent').innerHTML = '<div class="empty-state"><p>Click "Generate Redlined Letter" to draft a fully revised letter — incorporating any research items you\'ve checked above — shown as redlines and downloadable as Word.</p></div>';
             document.getElementById('finalLetterText').value = '';
@@ -2556,7 +2390,7 @@
                     if (data.error) { target.innerHTML = `<div class="empty-state"><p>${escapeHTML(data.error)}</p></div>`; return; }
                     target.innerHTML = `
                         <div class="breakdown-item">
-                            <div class="breakdown-title" style="margin-bottom:8px;">Why this can't yet reach 80+</div>
+                            <div class="breakdown-title" style="margin-bottom:8px;">What most limits this case today</div>
                             <div class="breakdown-description">${escapeHTML(data.whyNot80 || '')}</div>
                         </div>
                         <div class="breakdown-item">
