@@ -187,6 +187,27 @@
     .ia-meta span.rec-hold { background: #fdecea; color: #9b2620; }
     .spin { display: inline-block; width: 12px; height: 12px; border: 2px solid #c9d6e4; border-top-color: var(--navy); border-radius: 50%; animation: sp 0.9s linear infinite; vertical-align: -2px; margin-right: 6px; }
     @keyframes sp { to { transform: rotate(360deg); } }
+    /* v13: a running analysis or redline must be impossible to miss (Michael, 2026-09-27). */
+    .ia-running { border: 2px solid #d92d20; background: #fff1f0; color: #b42318; }
+    .ia-running strong, .ia-running .run-word { color: #b42318; }
+    .run-word { font-weight: 800; letter-spacing: .6px; text-transform: uppercase; animation: runflash 1s steps(2, start) infinite; }
+    .ia-running .spin { border-color: #f5c2bd; border-top-color: #d92d20; }
+    .run-pill { display: inline-block; margin-left: 8px; padding: 2px 10px; border-radius: 12px; background: #d92d20; color: #fff; font-size: 11px; font-weight: 800; letter-spacing: .6px; animation: runflash 1s steps(2, start) infinite; vertical-align: 2px; }
+    @keyframes runflash { 0% { opacity: 1; } 50% { opacity: .25; } 100% { opacity: 1; } }
+    @media (prefers-reduced-motion: reduce) { .run-word, .run-pill { animation: none; } }
+    /* v13: the analysis actions are the main controls on the panel. */
+    .btn-act { display: inline-flex; align-items: center; gap: 6px; font-family: 'Segoe UI', -apple-system, Helvetica, Arial, sans-serif; letter-spacing: 0; background: #b42318; color: #fff !important; border: 1px solid #b42318; border-radius: 6px; padding: 8px 16px; font-size: 13px; font-weight: 700; text-decoration: none; cursor: pointer; box-shadow: 0 1px 3px rgba(180,35,24,.35); }
+    .btn-act:hover { background: #912018; border-color: #912018; }
+    .btn-act.outline { background: #fff; color: #b42318 !important; }
+    .btn-act.outline:hover { background: #fdecea; }
+    .ia-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin: 4px 0 12px; padding: 10px 12px; background: #fdf3f2; border: 1px solid #f5c2bd; border-radius: 8px; }
+    /* v13: appeals sit directly below the case they appeal. */
+    tbody tr.appeal-row td { background: #fffaf0; }
+    tbody tr.appeal-row td:first-child { border-left: 4px solid #d97706; }
+    .appeal-tag { display: inline-block; margin-bottom: 3px; padding: 1px 8px; border-radius: 10px; background: #d97706; color: #fff; font-size: 10.5px; font-weight: 800; letter-spacing: .4px; white-space: nowrap; }
+    .appeal-of { font-size: 11px; color: #92400e; }
+    .appeal-box { border: 1px solid #f0c36d; background: #fff8e6; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 13px; color: #6b4a00; }
+    .appeal-box a { color: #0b3e76; font-weight: 600; cursor: pointer; }
     .doclink { color: var(--navy); font-weight: 600; text-decoration: none; white-space: nowrap; }
     .doclink:hover { text-decoration: underline; }
     @media print {
@@ -330,7 +351,7 @@
     <div class="dhead">
         <div style="flex:1;">
             <h2 id="dTitle">&nbsp;</h2>
-            <div class="sub" id="dSub">&nbsp;</div>
+            <div class="sub" id="dSub">&nbsp;</div><span id="dRunning"></span>
         </div>
         <button class="btn-ghost" onclick="closeDrawer()">Close</button>
     </div>
@@ -481,7 +502,9 @@ function setBanner(kind, html) {
 }
 
 const COLUMNS = [
-    { key: 'CaseID',       label: 'Internal ID', render: r => '<div class="id">' + esc(r.CaseID || '—') + '</div><div class="id" style="opacity:.6;">' + esc(r.SubmissionId) + '</div>' },
+    { key: 'CaseID',       label: 'Internal ID', render: r => (r.IsAppeal ? '<div>' + (r._depth ? '<span style="color:#d97706; font-weight:700;">&#8627;</span> ' : '') + '<span class="appeal-tag">APPEAL</span></div>' : '') +
+        '<div class="id">' + esc(r.CaseID || '—') + '</div><div class="id" style="opacity:.6;">' + esc(r.SubmissionId) + '</div>' +
+        (r.IsAppeal ? '<div class="appeal-of">of ' + esc(r.ParentCaseID || r.ParentSubmissionId || r.AppealOfRef || '?') + (r.ParentSubmissionId ? '' : ' (not in system)') + '</div>' : '') },
     { key: 'CustomerName', label: 'Customer',    render: r => '<div class="cust">' + esc(r.CustomerName) + '</div><div class="id">' + esc(r.AccountNumber || '') + '</div>' },
     { key: 'UtilityName',  label: 'Utility',     render: r => esc(r.UtilityName) + '<div class="id">' + esc(r.UtilityType || '') + '</div>' },
     { key: 'IssueType',    label: 'Issue type',  render: r => esc(r.IssueType || '') },
@@ -667,7 +690,7 @@ function render() {
         if (q) {
             const hay = [r.SubmissionId, r.CaseID, r.UtilityCaseID, r.CustomerName, r.AccountNumber,
                          r.AuditorName, r.UtilityName, r.UtilityType, r.IssueType, r.Status,
-                         r.AssignedTo, r.AdminNotes].join(' ').toLowerCase();
+                         r.AssignedTo, r.AdminNotes, r.IsAppeal ? 'appeal' : '', r.ParentCaseID, r.ParentSubmissionId, r.AppealOfRef].join(' ').toLowerCase();
             if (hay.indexOf(q) === -1) return false;
         }
         return true;
@@ -682,12 +705,14 @@ function render() {
         return String(x).localeCompare(String(y)) * sortDir;
     });
 
+    VIEW = groupAppeals(VIEW);
+
     document.getElementById('head').innerHTML = COLUMNS.map(c => c.nosort ? '<th style="cursor:default;"></th>' :
         '<th onclick="sortBy(\'' + c.key + '\')">' + esc(c.label) +
         (sortKey === c.key ? ' <span class="arrow">' + (sortDir === 1 ? '▲' : '▼') + '</span>' : '') + '</th>').join('');
 
     document.getElementById('rows').innerHTML = VIEW.length
-        ? VIEW.map(r => '<tr onclick="openDetail(\'' + r.SubmissionId + '\')" class="' + (selected && selected.SubmissionId === r.SubmissionId ? 'sel' : '') + '">' +
+        ? VIEW.map(r => '<tr onclick="openDetail(\'' + r.SubmissionId + '\')" class="' + (selected && selected.SubmissionId === r.SubmissionId ? 'sel' : '') + (r._depth ? ' appeal-row' : '') + '"' + (r._depth ? ' style="--d:' + r._depth + '"' : '') + '>' +
             COLUMNS.map(c => '<td class="' + (c.cls || '') + '">' + c.render(r) + '</td>').join('') + '</tr>').join('')
         : '<tr><td colspan="' + COLUMNS.length + '"><div class="empty">' +
             (MODE === 'deleted' ? (DELETED.length ? 'No deleted cases match these filters.' : 'No deleted cases.') :
@@ -696,6 +721,27 @@ function render() {
 
     document.getElementById('count').textContent = VIEW.length + ' of ' + BASE.length + ' shown · ' +
         money(VIEW.reduce((s, r) => s + total(r), 0)) + ' at stake';
+}
+
+// v13: every appeal is listed directly below the case it appeals, however much
+// later it was filed; appeals of appeals nest the same way. The chosen sort
+// orders the families (each at the rank of its highest-ranked member); each
+// case's appeals follow it, oldest first.
+// If the predecessor is filtered out, the appeal stands on its own (still tagged).
+function groupAppeals(rows) {
+    const inView = new Set(rows.map(r => r.SubmissionId));
+    const kids = {};
+    rows.forEach(r => { if (r.ParentSubmissionId && inView.has(r.ParentSubmissionId) && r.ParentSubmissionId !== r.SubmissionId) (kids[r.ParentSubmissionId] = kids[r.ParentSubmissionId] || []).push(r); });
+    Object.keys(kids).forEach(k => kids[k].sort((a, b) => String(a.CreatedAt || '').localeCompare(String(b.CreatedAt || ''))));
+    const out = [], seen = new Set();
+    const walk = (r, d) => { if (seen.has(r.SubmissionId)) return; seen.add(r.SubmissionId); r._depth = d; out.push(r); (kids[r.SubmissionId] || []).forEach(k => walk(k, d + 1)); };
+    // A family takes the place of its highest-ranked member, so a new appeal on
+    // an old case brings the case (with the appeal under it) up the list.
+    const byId = {}; rows.forEach(r => { byId[r.SubmissionId] = r; });
+    const rootOf = r => { let x = r, hops = 0; while (x.ParentSubmissionId && byId[x.ParentSubmissionId] && hops++ < 20) x = byId[x.ParentSubmissionId]; return x; };
+    rows.forEach(r => walk(rootOf(r), 0));
+    rows.forEach(r => walk(r, 0));   // anything left (a loop in the links) still shows
+    return out;
 }
 
 function sortBy(key) {
@@ -713,6 +759,8 @@ function openDetail(id) {
     document.getElementById('scrim').classList.add('open');
     document.getElementById('dTitle').textContent = selected.CustomerName;
     document.getElementById('dSub').textContent = selected.SubmissionId + ' · ' + selected.UtilityName + ' · ' + money(total(selected));
+    document.getElementById('dRunning').innerHTML = '';
+    if (selected.IsAppeal) document.getElementById('dSub').textContent = 'APPEAL · ' + document.getElementById('dSub').textContent;
     document.getElementById('zipLink').removeAttribute('href');
     document.getElementById('docsLink').href = docsUrl(id);
     document.getElementById('saveMsg').textContent = '';
@@ -810,6 +858,10 @@ function loadIssueAnalysis(id) {
 // Repaints only the analysis panel, so a background refresh never wipes
 // edits someone is typing into the Management fields below it.
 function paintIssueAnalysis() {
+    const cur0 = detail && detail.issueAnalysis && (detail.issueAnalysis.analyses || [])[0];
+    const pill = document.getElementById('dRunning');
+    if (pill) pill.innerHTML = cur0 && (cur0.status === 'queued' || cur0.status === 'running')
+        ? '<span class="run-pill">&#9679; ' + (cur0.trigger === 'redline' ? 'REDLINE RUNNING' : 'ANALYSIS RUNNING') + '</span>' : '';
     if (isOldVersion()) return;   // an earlier version is on screen; leave it alone
     const w = document.getElementById('iaWrap');
     if (w) w.innerHTML = renderIssueAnalysis(); else renderDetail();
@@ -847,7 +899,7 @@ function letterBoxHtml() {
     let h = '<div class="letterbox' + (f ? '' : ' need') + '"><strong>Letter to redline:</strong> ' +
         (f ? esc(f.FileName) : '<span style="color:#8a5a00;">none chosen. Check the letter below, or add it, so the redline can be made.</span>');
     h += '<details' + (f ? '' : ' open') + ' style="margin-top:6px;"><summary style="cursor:pointer; color:var(--navy);">Choose the letter</summary><div style="margin-top:6px;">' + letterChooserHtml('drawer') + '</div></details>';
-    if (f) h += '<div style="margin-top:8px;"><button class="btn-light" style="padding:5px 12px; font-size:12px;" onclick="makeRedline()" title="Redlines this letter against the latest analysis, without re-running the analysis. Becomes the next version.">Make redline</button></div>';
+    if (f) h += '<div style="margin-top:8px;"><button class="btn-act outline" style="padding:6px 14px; font-size:12.5px;" onclick="makeRedline()" title="Redlines this letter against the latest analysis, without re-running the analysis. Becomes the next version.">Make redline</button></div>';
     return h + '</div>';
 }
 
@@ -896,7 +948,7 @@ function redlineBlockHtml(a) {
             : 'Not produced: ' + esc(rl.error || 'unknown reason')) + '</div></div>';
     }
     h += '<div class="id" style="margin-bottom:6px;">Baseline: <strong>' + esc(rl.sourceName) + '</strong> · <ins style="color:#1e7e34;">inserted</ins> · <del style="color:#cc0000;">deleted</del>' +
-        (a.redlineFileId ? ' · <a href="' + US.authedUrl(API + '/files/' + a.redlineFileId) + '" target="_blank" rel="noopener">Download redline (Word)</a>' : '') + '</div>';
+        (a.redlineFileId ? ' &nbsp; <a class="btn-act" style="padding:5px 12px; font-size:12px;" href="' + US.authedUrl(API + '/files/' + a.redlineFileId) + '" target="_blank" rel="noopener">&#11015; Download redline (Word)</a>' : '') + '</div>';
     if (rl.truncated) h += '<div class="banner warn">The redline reached its length limit and may stop before the end of the letter.</div>';
     if ((rl.integrity || []).length) h += '<div class="banner err"><strong>Integrity checks on this letter:</strong><ul style="margin:6px 0 0 18px;">' + rl.integrity.map(f => '<li><strong>' + esc(f.check) + ':</strong> ' + esc(f.detail) + '</li>').join('') + '</ul></div>';
     if ((rl.changeSummary || []).length) h += '<details style="margin-bottom:8px;"><summary style="cursor:pointer; font-size:12.5px; color:var(--navy);">Changes made (' + rl.changeSummary.length + ')</summary><ul style="font-size:12px; margin:6px 0 0 18px;">' +
@@ -922,9 +974,9 @@ function analysisBodyHtml(cur, d, opts) {
     h += chips.length ? '<div class="ia-meta">' + chips.join('') + '</div>' : '';
     if (m.estimatedRecovery) h += '<div style="font-size:12.5px; margin-bottom:4px;"><strong>Estimated recovery:</strong> ' + esc(m.estimatedRecovery) + '</div>';
     if (m.topRisk) h += '<div style="font-size:12.5px; margin-bottom:8px;"><strong>Top risk:</strong> ' + esc(m.topRisk) + '</div>';
-    h += '<div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px;">' +
-        (cur.fileId ? '<a class="btn-light" style="text-decoration:none; padding:5px 12px; font-size:12px;" href="' + US.authedUrl(API + '/files/' + cur.fileId) + '" target="_blank" rel="noopener">Download Word file</a>' : '') +
-        (cur.redlineFileId ? '<a class="btn-light" style="text-decoration:none; padding:5px 12px; font-size:12px;" href="' + US.authedUrl(API + '/files/' + cur.redlineFileId) + '" target="_blank" rel="noopener">Download redline</a>' : '') +
+    h += '<div class="ia-actions">' +
+        (cur.fileId ? '<a class="btn-act" href="' + US.authedUrl(API + '/files/' + cur.fileId) + '" target="_blank" rel="noopener">&#11015; Download Word file</a>' : '') +
+        (cur.redlineFileId ? '<a class="btn-act" href="' + US.authedUrl(API + '/files/' + cur.redlineFileId) + '" target="_blank" rel="noopener">&#11015; Download redline</a>' : '') +
         (opts.rerun || '') +
         '<span class="id">' + (cur.caseVersion ? 'Version ' + cur.caseVersion + ' · ' : '') + 'Round ' + cur.round + ' · ' + fmtDateTime(cur.completedAt) + (cur.model ? ' · ' + esc(cur.model) : '') +
         (cur.trigger === 'redline' ? ' · redline only' : '') + '</span></div>';
@@ -953,7 +1005,7 @@ function renderIssueAnalysis() {
     if (d.error) return h + '<div class="banner err">' + esc(d.error) + '</div>';
     const list = d.analyses || [];
     const cur = list[0];
-    const rerun = '<button class="btn-light" style="padding:5px 12px; font-size:12px;" onclick="runIssueAnalysis(' + (cur && cur.status === 'done' ? 'true' : 'false') + ')">' +
+    const rerun = '<button class="btn-act" onclick="runIssueAnalysis(' + (cur && cur.status === 'done' ? 'true' : 'false') + ')">&#8635; ' +
         (cur ? 'Run analysis again' : 'Run analysis now') + '</button>';
     if (!d.configured) h += '<div class="banner warn">ANTHROPIC_API_KEY is not set on the API service, so analyses cannot run. Add it in Railway → issue-review-api → Variables.</div>';
     h += letterBoxHtml();
@@ -963,8 +1015,8 @@ function renderIssueAnalysis() {
         // Elapsed time uses the server's clock on both ends, so a PC clock that is off does not matter.
         const secs = Math.max(0, Math.round((new Date(d.serverNow || Date.now()) - new Date(cur.createdAt)) / 1000));
         const el = Math.floor(secs / 60) + 'm ' + String(secs % 60).padStart(2, '0') + 's';
-        if (cur.trigger === 'redline') return h + '<div class="ia-box"><span class="spin"></span><strong>Making the redline…</strong> running for <strong>' + el + '</strong>. Usually 1–3 minutes. This panel refreshes itself.</div>';
-        return h + '<div class="ia-box"><span class="spin"></span><strong>Analyzing round ' + cur.round + '…</strong> running for <strong>' + el + '</strong>.' +
+        if (cur.trigger === 'redline') return h + '<div class="ia-box ia-running" role="status" aria-live="polite"><span class="spin"></span><span class="run-word">Running</span> &nbsp;<strong>Making the redline…</strong> for <strong>' + el + '</strong>. Usually 1–3 minutes. This panel refreshes itself.</div>';
+        return h + '<div class="ia-box ia-running" role="status" aria-live="polite"><span class="spin"></span><span class="run-word">Running</span> &nbsp;<strong>Analyzing round ' + cur.round + '…</strong> for <strong>' + el + '</strong>.' +
             ' Most analyses take 3–8 minutes, plus 1–3 for the redline (Claude reads every attachment and checks citations on the web). This panel refreshes itself.' +
             ' If there is no result after ' + (d.staleMinutes || 20) + ' minutes it is stopped automatically and marked failed, with the reason.</div>';
     }
@@ -1148,6 +1200,23 @@ function field(id, label, type, value, options) {
     return '<div class="field"><label for="' + id + '">' + esc(label) + '</label>' + input + '</div>';
 }
 
+// v13: this case's link to the case it appeals, and to appeals filed against it.
+function appealBoxHtml() {
+    const s = (detail && detail.submission) || {};
+    const par = detail && detail.parent, apps = (detail && detail.appeals) || [];
+    const line = c => '<a onclick="openDetail(\'' + esc(c.SubmissionId) + '\')">' + esc(c.CaseID || c.SubmissionId) + '</a> · ' + esc(c.CustomerName || '') +
+        ' · filed ' + fmtDate(c.CreatedAt) + ' · <strong>' + esc(c.Status || '') + '</strong>';
+    let h = '';
+    const r0 = selected || {};
+    if (!r0.DeletedAt && /reject|adjust|denied|under appeal|closed/i.test(r0.Status || s.Status || ''))
+        h += '<div style="margin:0 0 12px;"><a class="btn-act outline" href="' + FORM_URL + (FORM_URL.indexOf('?') === -1 ? '?' : '&') + 'appealOf=' + encodeURIComponent(r0.SubmissionId) + '" target="_blank" rel="noopener" title="Opens the submission form with this case linked as the original. The appeal becomes a new case listed directly below this one.">&#9878; File an appeal of this case</a></div>';
+    if (s.IsAppeal) h += '<div class="appeal-box"><span class="appeal-tag">APPEAL</span> &nbsp;This case appeals ' +
+        (par ? line(par) : '<strong>' + esc(s.AppealOfRef || '?') + '</strong> (a case not entered in this system)') + '</div>';
+    if (apps.length) h += '<div class="appeal-box"><strong>Appeals filed on this case (' + apps.length + '):</strong><ul style="margin:6px 0 0 18px;">' +
+        apps.map(a => '<li>' + line(a) + '</li>').join('') + '</ul></div>';
+    return h;
+}
+
 function renderDetail() {
     const s = detail.submission || {};
     const r = selected;
@@ -1167,6 +1236,7 @@ function renderDetail() {
             (r.DeletedReason ? ': ' + esc(r.DeletedReason) : '') + '). Nothing was erased. <button class="btn-light" style="padding:3px 10px; font-size:12px;" onclick="restoreCase(\'' + esc(r.SubmissionId) + '\')">Restore</button></div>';
     }
 
+    html += appealBoxHtml();
     html += '<div id="iaWrap">' + renderIssueAnalysis() + '</div>';
 
     html += '<h3>Management</h3>';

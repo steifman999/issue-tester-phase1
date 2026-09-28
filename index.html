@@ -581,6 +581,19 @@
         .required {
             color: #cc0000;
         }
+        /* v13 (2026-09-27): appeals are linked to the case they appeal. */
+        .appeal-panel { border: 2px solid #e5e7eb; border-radius: 10px; padding: 12px 14px; margin-bottom: 16px; background: #fafafa; transition: border-color .15s, background .15s; }
+        .appeal-panel.on { border-color: #d97706; background: #fff8e6; }
+        .appeal-check { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; font-size: 14px; color: #1f2937; line-height: 1.4; }
+        .appeal-check input { width: 18px; height: 18px; margin-top: 1px; accent-color: #d97706; flex: none; }
+        .appeal-tag { display: inline-block; padding: 1px 8px; border-radius: 10px; background: #d97706; color: #fff; font-size: 11px; font-weight: 800; letter-spacing: .4px; }
+        .appeal-results { margin-top: 6px; border: 1px solid #e5e7eb; border-radius: 8px; background: #fff; max-height: 260px; overflow-y: auto; }
+        .appeal-results .opt { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; cursor: pointer; font-size: 13px; }
+        .appeal-results .opt:hover { background: #fff3db; }
+        .appeal-results .opt .m { color: #6b7280; font-size: 12px; }
+        .appeal-linked { margin-top: 8px; padding: 10px 12px; border-radius: 8px; background: #fff; border: 1px solid #f0c36d; font-size: 13px; }
+        .appeal-linked button { margin-left: 8px; font-size: 12px; padding: 2px 10px; border-radius: 5px; border: 1px solid #d1d5db; background: #fff; cursor: pointer; }
+        .appeal-banner { display: none; margin: 16px 0; padding: 10px 16px; background: #fff3db; border: 2px solid #d97706; border-radius: 8px; font-size: 14px; color: #7a4a00; }
     </style>
 </head>
 <body>
@@ -595,6 +608,7 @@
             <p class="confidential-notice">Private and Confidential UtiliSave Working Document. Do not disseminate.</p>
         </div>
 
+        <div id="appealBanner" class="appeal-banner"></div>
         <div id="reopenBanner" style="display:none; margin:16px 0; padding:12px 16px; background:#fff3cd; border:1px solid #e0c880; border-radius:8px; font-size:13px; color:#7a5c00;"></div>
 
         <div class="main">
@@ -748,6 +762,25 @@
                     <span>Upload Submission</span>
                     <span class="tooltip" data-tooltip="Upload your letter or Excel form for review">?</span>
                 </h2>
+
+                <div class="appeal-panel" id="appealPanel">
+                    <label class="appeal-check">
+                        <input type="checkbox" id="isAppeal" onchange="toggleAppeal()">
+                        <span><strong>This submission is an appeal.</strong> Check this if the files you are attaching appeal a case that was already filed.</span>
+                    </label>
+                    <div id="appealFields" style="display:none; margin-top:12px;">
+                        <label for="appealSearch" style="font-weight:600; font-size:13px;">Appeal of (the original case) <span class="required">*</span></label>
+                        <input type="text" id="appealSearch" autocomplete="off" oninput="appealLookup()" placeholder="Type its UtiliSave Internal ID (USLLC…), repository ID (SUB-…), customer or account number" style="margin-top:4px;">
+                        <div id="appealResults" class="appeal-results" style="display:none;"></div>
+                        <div id="appealLinked"></div>
+                        <label class="appeal-check" style="margin-top:10px; font-size:12.5px; color:#555;">
+                            <input type="checkbox" id="appealNotInSystem" onchange="toggleAppealRef()" style="width:15px; height:15px;">
+                            <span>The original case was never entered in this system</span>
+                        </label>
+                        <input type="text" id="appealOfRef" placeholder="Its UtiliSave Internal ID, e.g. USLLC0126-3" style="display:none; margin-top:6px;">
+                        <p style="margin:8px 0 0; color:#6b7280; font-size:12px; line-height:1.5;">The appeal is filed as its own case, marked APPEAL, and the console lists it directly below the original case. Customer, account, utility and issue type are copied from the original; change them if they differ.</p>
+                    </div>
+                </div>
 
                 <div class="upload-area" id="uploadArea">
                     <p><strong>Click to upload or drag here</strong></p>
@@ -916,14 +949,19 @@
 
                     <div id="historyActions" style="display:none; margin-bottom:20px; gap:10px; flex-wrap:wrap;">
                         <a id="downloadZipLink" class="btn-secondary" style="text-decoration:none; display:inline-block; text-align:center;" href="#" target="_blank" rel="noopener">Download Case ZIP (share this history)</a>
-                        <button type="button" class="btn-primary" id="reopenCaseBtn" style="display:none;" onclick="reopenCase()">Reopen This Case (File an Appeal)</button>
+                        <button type="button" class="btn-primary" id="fileAppealBtn" style="display:none;" onclick="startAppealFrom()" title="The utility has decided this case. The appeal is filed as a new case, linked to this one and listed directly below it; this case becomes Under Appeal.">File an Appeal of This Case</button>
+                        <button type="button" class="btn-secondary" id="reopenCaseBtn" style="display:none;" onclick="reopenCase()" title="For revising the letter while the utility is still reviewing it. After the utility decides, file an appeal instead.">Revise This Case (next round)</button>
                     </div>
+                    <p id="reopenRuleNote" style="display:none; font-size:12.5px; color:#555; margin:-10px 0 18px;">
+                        <strong>Which one?</strong> Before the utility decides, <em>Revise</em> the case (same case, next round).
+                        After a decision (rejected, adjusted or partly adjusted), <em>File an Appeal</em>: it becomes a new case, marked APPEAL, listed directly below this one, and this case is set to Under Appeal.
+                    </p>
 
                     <!-- Record Outcome: annotates the round already filed — it does NOT
-                         start a new one. Use "Reopen This Case" above for that. -->
+                         start a new one. Use "File an Appeal" or "Revise This Case" above for that. -->
                     <div id="recordOutcomeSection" style="display:none; margin-bottom:24px; padding:16px; border:1px solid #e0dfc2; border-radius:8px; background:#fffbe6;">
                         <h3 style="font-size:15px; color:#1f4e78; margin-bottom:6px;">Record Outcome — Round <span id="outcomeRoundLabel"></span></h3>
-                        <p style="font-size:12.5px; color:#666; margin-bottom:10px;">What happened after this round was filed? This updates that round's status and reason — it doesn't start a new round. Once you've recorded a rejection/adjustment here, use "Reopen This Case" above to file the appeal as the next round.</p>
+                        <p style="font-size:12.5px; color:#666; margin-bottom:10px;">What happened after this round was filed? This updates that round's status and reason — it doesn't start a new round. Once you've recorded a rejection/adjustment here, use "File an Appeal of This Case" above.</p>
                         <div class="form-group" style="max-width:280px;">
                             <label>Status</label>
                             <select id="outcomeStatus">
@@ -1594,6 +1632,7 @@
                 submissionId: currentSubmissionId, // null on first save -> backend creates one
                 caseId: caseId,
                 utilityCaseId: utilityCaseId,
+                ...appealPayload(),
                 scoreBreakdown: lastReviewData.breakdown,
                 suggestions: lastReviewData.suggestions,
                 issues: lastReviewData.issues,
@@ -1731,9 +1770,111 @@
                 submissionDate: g('submissionDate'),
                 submissionText: g('submissionText'),
                 analysisNotes: g('analysisNotes'),
-                skillSuggestion: g('skillSuggestion')
+                skillSuggestion: g('skillSuggestion'),
+                ...appealPayload()
             };
         }
+
+        // ---- Appeals (v13) ----------------------------------------------------
+        // An appeal is its own case linked to the case it appeals (the
+        // "predecessor"), so the console can list it directly below that case.
+        let appealParent = null;      // the linked case, from GET /?action=lookup
+        let appealTimer = null;
+        function appealPayload() {
+            const on = document.getElementById('isAppeal').checked;
+            if (!on) return { isAppeal: false };
+            const notIn = document.getElementById('appealNotInSystem').checked;
+            return { isAppeal: true,
+                     parentSubmissionId: !notIn && appealParent ? appealParent.SubmissionId : null,
+                     appealOfRef: notIn ? (document.getElementById('appealOfRef').value || '').trim() : null };
+        }
+        function appealProblem() {
+            const a = appealPayload();
+            if (!a.isAppeal) return null;
+            if (!a.parentSubmissionId && !a.appealOfRef) return 'You checked "This submission is an appeal". Choose the original case under "Appeal of", or tick "never entered in this system" and type its internal ID.';
+            if (a.parentSubmissionId && a.parentSubmissionId === currentSubmissionId) return 'A case cannot be an appeal of itself. Choose the original case under "Appeal of".';
+            return null;
+        }
+        function toggleAppeal() {
+            const on = document.getElementById('isAppeal').checked;
+            document.getElementById('appealFields').style.display = on ? 'block' : 'none';
+            document.getElementById('appealPanel').classList.toggle('on', on);
+            if (on) document.getElementById('appealSearch').focus();
+            paintAppealBanner();
+        }
+        function toggleAppealRef() {
+            const notIn = document.getElementById('appealNotInSystem').checked;
+            document.getElementById('appealOfRef').style.display = notIn ? 'block' : 'none';
+            document.getElementById('appealSearch').disabled = notIn;
+            if (notIn) { appealParent = null; renderAppealLinked(); document.getElementById('appealResults').style.display = 'none'; document.getElementById('appealOfRef').focus(); }
+            paintAppealBanner();
+        }
+        function appealLookup() {
+            clearTimeout(appealTimer);
+            const q = document.getElementById('appealSearch').value.trim();
+            const box = document.getElementById('appealResults');
+            if (q.length < 2) { box.style.display = 'none'; return; }
+            appealTimer = setTimeout(() => {
+                fetch(`${APPS_SCRIPT_URL}?action=lookup&q=${encodeURIComponent(q)}`)
+                    .then(r => r.json())
+                    .then(d => {
+                        if (d.error) { box.innerHTML = '<div class="opt">' + escHtml(d.error) + '</div>'; box.style.display = 'block'; return; }
+                        const list = (d.matches || []).filter(m => m.SubmissionId !== currentSubmissionId);
+                        window._appealMatches = list;
+                        box.innerHTML = list.length ? list.map((m, i) => '<div class="opt" onclick="pickAppealParent(' + i + ')"><strong>' + escHtml(m.CaseID || m.SubmissionId) + '</strong> · ' + escHtml(m.CustomerName) +
+                            (m.IsAppeal ? ' <span class="appeal-tag">APPEAL</span>' : '') +
+                            '<div class="m">' + escHtml(m.SubmissionId) + ' · acct ' + escHtml(m.AccountNumber || '') + ' · ' + escHtml(m.UtilityName || '') + ' · ' + escHtml(m.IssueType || '') +
+                            ' · filed ' + (m.CreatedAt ? new Date(m.CreatedAt).toLocaleDateString() : '?') + ' · ' + escHtml(m.Status || '') + '</div></div>').join('')
+                            : '<div class="opt">No case in the system matches "' + escHtml(q) + '". If it was never entered here, tick the box below and type its ID.</div>';
+                        box.style.display = 'block';
+                    })
+                    .catch(err => { box.innerHTML = '<div class="opt">Lookup failed: ' + escHtml(err.message) + '</div>'; box.style.display = 'block'; });
+            }, 300);
+        }
+        function pickAppealParent(i) {
+            const m = (window._appealMatches || [])[i];
+            if (!m) return;
+            appealParent = m;
+            document.getElementById('appealResults').style.display = 'none';
+            document.getElementById('appealSearch').value = m.CaseID || m.SubmissionId;
+            // Copy the case facts from the original, only into fields still empty.
+            const setIf = (id, v) => { const el = document.getElementById(id); if (el && !el.value && v) el.value = v; };
+            setIf('customerName', m.CustomerName); setIf('accountNumber', m.AccountNumber);
+            if (!document.getElementById('utilityName').value && m.UtilityName) addCustomOption('utilityName', m.UtilityName, { persist: false });
+            if (!document.getElementById('utilityType').value && m.UtilityType) document.getElementById('utilityType').value = m.UtilityType;
+            if (!document.getElementById('issueType').value && m.IssueType) addCustomOption('issueType', m.IssueType, { persist: false });
+            setIf('utilityCaseId', m.UtilityCaseID);
+            renderAppealLinked();
+            paintAppealBanner();
+        }
+        function renderAppealLinked() {
+            const el = document.getElementById('appealLinked');
+            if (!appealParent) { el.innerHTML = ''; return; }
+            const m = appealParent;
+            el.innerHTML = '<div class="appeal-linked"><span class="appeal-tag">APPEAL OF</span> <strong>' + escHtml(m.CaseID || m.SubmissionId) + '</strong> · ' + escHtml(m.CustomerName) +
+                '<button type="button" onclick="clearAppealParent()">Change</button>' +
+                '<div style="color:#6b7280; font-size:12px; margin-top:3px;">' + escHtml(m.SubmissionId) + ' · ' + escHtml(m.UtilityName || '') + ' · filed ' + (m.CreatedAt ? new Date(m.CreatedAt).toLocaleDateString() : '?') +
+                ' · status: ' + escHtml(m.Status || '') + (m.LatestOutcomeReason ? ' · utility outcome: “' + escHtml(String(m.LatestOutcomeReason).slice(0, 160)) + '”' : '') + '</div></div>';
+        }
+        function clearAppealParent() { appealParent = null; renderAppealLinked(); document.getElementById('appealSearch').value = ''; document.getElementById('appealSearch').focus(); paintAppealBanner(); }
+        function paintAppealBanner() {
+            const b = document.getElementById('appealBanner');
+            const a = appealPayload();
+            if (!a.isAppeal) { b.style.display = 'none'; return; }
+            b.style.display = 'block';
+            b.innerHTML = '<span class="appeal-tag">APPEAL</span> &nbsp;This submission will be filed as an <strong>appeal</strong>' +
+                (appealParent ? ' of <strong>' + escHtml(appealParent.CaseID || appealParent.SubmissionId) + '</strong> (' + escHtml(appealParent.CustomerName) + ')' :
+                 a.appealOfRef ? ' of <strong>' + escHtml(a.appealOfRef) + '</strong> (not in this system)' : ' — choose the original case on the right, under "Appeal of".') + '.';
+        }
+        function resetAppeal() {
+            document.getElementById('isAppeal').checked = false;
+            document.getElementById('appealNotInSystem').checked = false;
+            document.getElementById('appealSearch').value = ''; document.getElementById('appealSearch').disabled = false;
+            document.getElementById('appealOfRef').value = ''; document.getElementById('appealOfRef').style.display = 'none';
+            document.getElementById('appealResults').style.display = 'none';
+            appealParent = null; renderAppealLinked(); toggleAppeal();
+        }
+        function escHtml(v) { return String(v === null || v === undefined ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 
         // Same required-field rules as the review, stated once so Submit and
         // Review can never disagree about what a complete form looks like.
@@ -1756,6 +1897,8 @@
             if (!data.submissionText && selectedFiles.length === 0) {
                 return 'Attach a document or paste the submission text before submitting.';
             }
+            const ap = appealProblem();
+            if (ap) return ap;
             return null;
         }
 
@@ -1959,8 +2102,12 @@
             // data.versions comes back newest-first, so [0] is the current round.
             const latestVersion = (data.versions && data.versions[0]) || null;
             const currentStatus = (latestVersion && latestVersion.Status) || data.submission.Status || '';
-            const looksLikeOutcome = /reject|denied|adjust/i.test(currentStatus);
-            document.getElementById('reopenCaseBtn').style.display = looksLikeOutcome ? 'inline-block' : 'none';
+            // v13 rule (Michael, 2026-09-27): after the utility decides, an appeal is a
+            // new linked case; before it decides, revising stays on the same case.
+            const looksLikeOutcome = caseIsDecided(data);
+            document.getElementById('fileAppealBtn').style.display = looksLikeOutcome ? 'inline-block' : 'none';
+            document.getElementById('reopenCaseBtn').style.display = 'inline-block';
+            document.getElementById('reopenRuleNote').style.display = 'block';
 
             document.getElementById('recordOutcomeSection').style.display = 'block';
             document.getElementById('outcomeRoundLabel').textContent = latestVersion ? latestVersion.VersionNumber : '1';
@@ -2002,12 +2149,14 @@
                     let html = `
                         <div class="breakdown-item">
                             <div class="breakdown-header">
-                                <div class="breakdown-title">${data.submission.CustomerName || ''} — ${data.submission.CaseID || '(no case ID yet)'}</div>
+                                <div class="breakdown-title">${data.submission.IsAppeal ? '<span class="appeal-tag">APPEAL</span> ' : ''}${data.submission.CustomerName || ''} — ${data.submission.CaseID || '(no case ID yet)'}</div>
                                 <div class="breakdown-score">Status: ${data.submission.Status || ''}</div>
                             </div>
                             <div class="breakdown-description">
                                 Auditor: ${data.submission.AuditorName || ''} | Utility: ${data.submission.UtilityName || ''} (${data.submission.UtilityType || ''})<br>
                                 Account: ${data.submission.AccountNumber || ''} | Refund: $${data.submission.FinancialImpactRefund || 0} | Future Savings: $${data.submission.FinancialImpactFuture || 0}
+                                ${data.submission.IsAppeal ? '<br><strong>Appeal of:</strong> ' + (data.parent ? escHtml((data.parent.CaseID || data.parent.SubmissionId) + ' — ' + data.parent.CustomerName + ' (' + data.parent.SubmissionId + ', status ' + data.parent.Status + ')') : escHtml(data.submission.AppealOfRef || '?') + ' (not in this system)') : ''}
+                                ${(data.appeals || []).length ? '<br><strong>Appeals filed on this case:</strong> ' + data.appeals.map(a => escHtml((a.CaseID || a.SubmissionId) + ' (' + a.SubmissionId + ', ' + a.Status + ')')).join('; ') : ''}
                                 ${data.submission.AnalysisNotes ? '<br><br><strong>Notes for This Analysis:</strong><br>' + data.submission.AnalysisNotes : ''}
                             </div>
                         </div>
@@ -2118,7 +2267,7 @@
         }
 
         // Records the outcome onto the round that already happened — does NOT
-        // start a new round. To file an appeal, use "Reopen This Case" instead.
+        // start a new round. To file an appeal, use "File an Appeal of This Case".
         function saveOutcome() {
             if (!currentSubmissionId) return;
             const status = document.getElementById('outcomeStatus').value;
@@ -2154,8 +2303,46 @@
         // evidence, etc.). Nothing is saved yet — clicking "Review Submission"
         // then "Save Version to Repository" is what actually files this round,
         // because currentSubmissionId already points at this case's id.
+        // Has the utility decided this case? (a recorded rejection or adjustment)
+        function caseIsDecided(data) {
+            const latest = (data && data.versions && data.versions[0]) || null;
+            const st = (latest && latest.Status) || (data && data.submission && data.submission.Status) || '';
+            return /reject|denied|adjust|under appeal/i.test(st) || !!(latest && latest.OutcomeReason);
+        }
+
+        // Files an appeal of the case loaded in History: a NEW case, linked to it
+        // (so the console lists it directly below), with its facts copied in.
+        function startAppealFrom() {
+            if (!currentHistoryData || !currentSubmissionId) return;
+            const data = currentHistoryData, sub = data.submission, origId = currentSubmissionId;
+            const latest = (data.versions && data.versions[0]) || null;
+            resetForm();
+            currentHistoryData = data;
+            document.getElementById('customerName').value = sub.CustomerName || '';
+            document.getElementById('accountNumber').value = sub.AccountNumber || '';
+            if (sub.UtilityName) addCustomOption('utilityName', sub.UtilityName, { persist: false });
+            document.getElementById('utilityType').value = sub.UtilityType || '';
+            if (sub.IssueType) addCustomOption('issueType', sub.IssueType, { persist: false });
+            document.getElementById('utilityCaseId').value = sub.UtilityCaseID || '';
+            document.getElementById('financialImpactRefund').value = sub.FinancialImpactRefund || '';
+            document.getElementById('financialImpactFuture').value = sub.FinancialImpactFuture || '';
+            document.getElementById('isAppeal').checked = true;
+            appealParent = { SubmissionId: origId, CaseID: sub.CaseID, CustomerName: sub.CustomerName, AccountNumber: sub.AccountNumber,
+                UtilityName: sub.UtilityName, UtilityType: sub.UtilityType, IssueType: sub.IssueType, Status: sub.Status,
+                CreatedAt: sub.CreatedAt, LatestOutcomeReason: latest ? latest.OutcomeReason : null };
+            document.getElementById('appealSearch').value = sub.CaseID || origId;
+            renderAppealLinked();
+            toggleAppeal();
+            const banner = document.getElementById('reopenBanner');
+            banner.style.display = 'block';
+            banner.innerHTML = 'Filing an <strong>APPEAL</strong> of <strong>' + escHtml(sub.CaseID || origId) + '</strong> as a new case. Give it its own UtiliSave Internal ID, attach the utility\'s decision and the appeal letter, answer the utility\'s stated reason' +
+                (latest && latest.OutcomeReason ? ' (“' + escHtml(String(latest.OutcomeReason).slice(0, 200)) + '”)' : '') + ', then click "Review Submission" and Submit.';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
         function reopenCase() {
             if (!currentHistoryData || !currentSubmissionId) return;
+            if (caseIsDecided(currentHistoryData) && !confirm('The utility has already decided this case.\n\nRecommended: click Cancel, then "File an Appeal of This Case". The appeal becomes a new case listed directly below this one.\n\nClick OK only to revise this same case as its next round anyway.')) return;
             const sub = currentHistoryData.submission;
             const latestVersion = (currentHistoryData.versions && currentHistoryData.versions[0]) || null;
             const nextRound = (latestVersion ? latestVersion.VersionNumber : 1) + 1;
@@ -2177,6 +2364,13 @@
             document.getElementById('submissionText').value = sub.SubmissionText || '';
             document.getElementById('analysisNotes').value = sub.AnalysisNotes || '';
             document.getElementById('skillSuggestion').value = '';
+            resetAppeal();
+            if (sub.IsAppeal) {
+                document.getElementById('isAppeal').checked = true;
+                if (currentHistoryData.parent) { appealParent = currentHistoryData.parent; document.getElementById('appealSearch').value = appealParent.CaseID || appealParent.SubmissionId; renderAppealLinked(); }
+                else if (sub.AppealOfRef) { document.getElementById('appealNotInSystem').checked = true; document.getElementById('appealOfRef').value = sub.AppealOfRef; toggleAppealRef(); }
+                toggleAppeal();
+            }
 
             // The old round's score/AI content no longer applies to the revised
             // argument — clear it so nothing stale lingers until regenerated.
@@ -2197,7 +2391,7 @@
 
             const banner = document.getElementById('reopenBanner');
             banner.style.display = 'block';
-            banner.innerHTML = `Reopening <strong>${currentSubmissionId}</strong> — this will become <strong>Round ${nextRound}</strong> once you review and save. Revise the argument below (e.g., respond to the outcome reason from Round ${latestVersion ? latestVersion.VersionNumber : 1}), then click "Review Submission."`;
+            banner.innerHTML = `Revising <strong>${currentSubmissionId}</strong> — this will become <strong>Round ${nextRound}</strong> once you review and save. Revise the argument below (e.g., respond to the outcome reason from Round ${latestVersion ? latestVersion.VersionNumber : 1}), then click "Review Submission."`;
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
@@ -2334,6 +2528,7 @@
             lastReviewData = null;
             selectedResearchItems = new Set();
             document.getElementById('reopenBanner').style.display = 'none';
+            resetAppeal();
         }
 
         // ---- AI-backed features: Score Gap Analysis, live-research checklist, ----
@@ -2649,6 +2844,19 @@
         // so clicking "View" there jumps straight to that case's history here.
         (function checkDeepLink() {
             const params = new URLSearchParams(window.location.search);
+            // v13: index.html?appealOf=SUB-... (from the console) starts an appeal of that case.
+            const appealOf = params.get('appealOf');
+            if (appealOf) {
+                fetch(`${APPS_SCRIPT_URL}?action=history&submissionId=${encodeURIComponent(appealOf)}`)
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.error || !data.submission) { alert('Could not load case ' + appealOf + ': ' + (data.error || 'not found')); return; }
+                        currentSubmissionId = appealOf; currentHistoryData = data;
+                        startAppealFrom();
+                    })
+                    .catch(err => alert('Could not load case ' + appealOf + ': ' + err.message));
+                return;
+            }
             const deepLinkId = params.get('submissionId');
             if (!deepLinkId) return;
 
