@@ -50,6 +50,30 @@
     .banner.ok { background: #e8f5ec; border: 1px solid #b8dfc4; color: #1c5c31; }
     .banner code { background: rgba(0,0,0,.06); padding: 1px 5px; border-radius: 3px; font-size: 12px; }
 
+    /* v14.2: Claude API spend strip */
+    .spend { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px 12px; margin-bottom: 16px; }
+    .spend .shead { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+    .spend .stitle { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); font-weight: 600; }
+    .spend .shead select { font-size: 12.5px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; background: #fff; color: var(--ink); }
+    .spend .shint { font-size: 11px; color: var(--muted); margin-left: auto; }
+    .spend .stiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+    .spend .st { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+    .spend .st .label { font-size: 11px; color: var(--muted); }
+    .spend .st .value { font-size: 22px; font-weight: 600; color: var(--navy); letter-spacing: -.4px; margin-top: 2px; font-variant-numeric: tabular-nums; }
+    .spend .st .foot { font-size: 11px; color: var(--muted); margin-top: 1px; }
+    .spend .st.muted .value { color: var(--muted); font-size: 15px; font-weight: 500; }
+    .spend .bars { display: flex; align-items: flex-end; gap: 2px; height: 56px; margin-top: 12px; padding-bottom: 1px; border-bottom: 1px solid var(--line); }
+    .spend .bar { flex: 1 1 0; max-width: 42px; min-width: 6px; background: var(--navy); opacity: .38; border-radius: 4px 4px 0 0; cursor: pointer; position: relative; }
+    .spend .bar:hover, .spend .bar.on { opacity: 1; }
+    .spend .bar.zero { background: var(--line); opacity: 1; }
+    .spend .barlab { display: flex; gap: 2px; font-size: 10px; color: var(--muted); margin-top: 3px; }
+    .spend .barlab span { flex: 1 1 0; max-width: 42px; min-width: 6px; text-align: center; overflow: hidden; white-space: nowrap; }
+    .spend .feat { font-size: 11.5px; color: var(--muted); margin-top: 8px; line-height: 1.6; }
+    .costbox { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin: 0 0 14px; background: #fafbfd; font-size: 12.5px; }
+    .costbox .big { font-size: 18px; font-weight: 600; color: var(--navy); font-variant-numeric: tabular-nums; }
+    .costbox table { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 12px; }
+    .costbox td { padding: 3px 0; border-top: 1px solid var(--line); }
+    .costbox td.n { text-align: right; font-variant-numeric: tabular-nums; }
     .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
     .kpi { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; cursor: pointer; transition: box-shadow .15s, border-color .15s; }
     .kpi:hover { box-shadow: 0 2px 10px rgba(11,62,118,.09); border-color: #c9d6e4; }
@@ -314,6 +338,7 @@
         </div>
     </div>
 
+    <div class="spend" id="spend" style="display:none;"></div>
     <div class="kpis" id="kpis"></div>
 
     <div class="panel">
@@ -512,6 +537,7 @@ const COLUMNS = [
     { key: 'IssueType',    label: 'Issue type',  render: r => esc(r.IssueType || '') },
     { key: 'AuditorName',  label: 'Auditor',     render: r => esc(r.AuditorName || '') },
     { key: 'Total',        label: 'At stake',    cls: 'num', render: r => '<strong>' + money(total(r)) + '</strong><div class="id">' + money(r.FinancialImpactRefund) + ' + ' + money(r.FinancialImpactFuture) + '</div>' },
+    { key: 'ApiCost',      label: 'API cost',    cls: 'num', render: r => r.ApiCost === null || r.ApiCost === undefined ? '<span class="id">—</span>' : '<span title="Claude API cost metered for this issue to date, all runs and features">' + usd(r.ApiCost) + '</span><div class="id">' + (r.ApiCalls || 0) + ' call' + (r.ApiCalls === 1 ? '' : 's') + '</div>' },
     { key: 'LatestScore',  label: 'Rating',      cls: 'num', render: r => scoreCell(r.LatestScore) + (r.LikelihoodUtility !== null && r.LikelihoodUtility !== undefined ? '<div class="id" title="Likelihood at the utility">' + esc(r.LikelihoodUtility) + '%</div>' : '') + (r.RatingMethod && !/Base Judgment/i.test(r.RatingMethod) ? '<div class="id" title="Rated before the Base Judgment Methodology was adopted">old rubric</div>' : '') },
     { key: 'Status',       label: 'Status',      render: r => statusPill(r.Status) + (r.LatestRound > 1 ? ' <span class="pill appeal">Round ' + r.LatestRound + '</span>' : '') },
     { key: 'Priority',     label: 'Priority',    render: r => '<span class="pri ' + esc(r.Priority || 'Normal') + '">' + esc(r.Priority || 'Normal') + '</span>' },
@@ -533,9 +559,102 @@ function rowButtons(r) {
         '<button class="danger" onclick="event.stopPropagation(); deleteCase(\'' + id + '\')" title="Move to Deleted cases (can be restored)">Delete</button></div>';
 }
 
+// ---------- v14.2: Claude API spend (metered per call by the API service; see api-costs.js) ----------
+const COST = { summary: null, bySub: {}, perIssue: {}, month: null, tz: (function () { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York'; } catch (e) { return 'America/New_York'; } })() };
+function usd(v) { const n = Number(v || 0); return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function monthName(m) { if (!m) return ''; const [y, mo] = m.split('-').map(Number); return new Date(y, mo - 1, 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }); }
+function mergeCosts() {
+    const apply = rows => rows.forEach(r => { const c = COST.bySub[r.SubmissionId]; r.ApiCost = c ? c.costUsd : null; r.ApiCalls = c ? c.calls : 0; });
+    apply(ALL); apply(DELETED);
+}
+function loadCosts() {
+    const q = '?tz=' + encodeURIComponent(COST.tz) + (COST.month ? '&month=' + COST.month : '');
+    return Promise.all([
+        fetch(API + '/api-costs/summary' + q).then(r => r.ok ? r.json() : null),
+        fetch(API + '/api-costs/by-submission').then(r => r.ok ? r.json() : null)
+    ]).then(([s, b]) => {
+        if (b && b.bySubmission) { COST.bySub = b.bySubmission; mergeCosts(); render(); }
+        COST.summary = s && !s.error ? s : null;
+        renderSpend();
+    }).catch(() => { COST.summary = null; renderSpend(); });
+}
+function setCostMonth(m) { COST.month = m || null; loadCosts(); }
+function renderSpend() {
+    const el = document.getElementById('spend');
+    const s = COST.summary;
+    if (!s) { el.style.display = 'none'; return; }
+    el.style.display = '';
+    const months = s.byMonth.map(x => x.month);
+    if (months.indexOf(s.currentMonth) === -1) months.push(s.currentMonth);
+    if (months.indexOf(s.month) === -1) months.push(s.month);
+    months.sort();
+    const sel = s.month;
+    const isCur = sel === s.currentMonth;
+    const tile = (label, value, foot, extra) => '<div class="st' + (extra || '') + '"><div class="label">' + label + '</div><div class="value">' + value + '</div><div class="foot">' + foot + '</div></div>';
+    const calls = x => x.calls + ' call' + (x.calls === 1 ? '' : 's');
+    const unl = x => x.unlinkedUsd > 0 ? ' · ' + usd(x.unlinkedUsd) + ' not tied to an issue' : '';
+    let actual;
+    if (s.actual && s.actual.available) {
+        const diff = s.actual.costUsd - s.selectedMonth.costUsd;
+        actual = tile('Anthropic actual bill · ' + esc(monthName(sel)), usd(s.actual.costUsd),
+            (Math.abs(diff) < 0.01 ? 'matches metered' : (diff > 0 ? usd(diff) + ' above metered' : usd(-diff) + ' below metered')) + ' · ' + esc(s.actual.scope));
+    } else {
+        const why = s.actual && s.actual.reason && !/ANTHROPIC_ADMIN_KEY is not set/.test(s.actual.reason) ? 'Lookup failed: ' + esc(s.actual.reason) + '.' : 'Add an Admin API key (ANTHROPIC_ADMIN_KEY) in Railway to compare with the invoice.';
+        actual = tile('Anthropic actual bill', 'Not connected', why, ' muted');
+    }
+    const byM = {}; s.byMonth.forEach(x => { byM[x.month] = x; });
+    // Bars: the last 12 months with data up to the current month, oldest to newest.
+    const first = months[0];
+    const seq = []; { let [y, m] = first.split('-').map(Number); const [ey, em] = s.currentMonth.split('-').map(Number);
+        while (y < ey || (y === ey && m <= em)) { seq.push(y + '-' + String(m).padStart(2, '0')); m++; if (m > 12) { m = 1; y++; } } }
+    const shown = seq.slice(-12);
+    const max = Math.max(0.01, ...shown.map(m => (byM[m] || {}).costUsd || 0));
+    const bars = shown.map(m => { const v = (byM[m] || {}).costUsd || 0; const h = v > 0 ? Math.max(4, Math.round(v / max * 54)) : 2;
+        return '<div class="bar' + (m === sel ? ' on' : '') + (v === 0 ? ' zero' : '') + '" style="height:' + h + 'px" role="button" tabindex="0" aria-label="' + esc(monthName(m)) + ': ' + usd(v) + '" title="' + esc(monthName(m)) + ': ' + usd(v) + ' (' + ((byM[m] || {}).calls || 0) + ' calls)" onclick="setCostMonth(\'' + m + '\')" onkeydown="if(event.key===\'Enter\')setCostMonth(\'' + m + '\')"></div>'; }).join('');
+    const labs = shown.map(m => '<span>' + esc(monthName(m).split(' ')[0]) + '</span>').join('');
+    const feats = (s.byFeature || []).map(f => esc(f.label) + ' ' + usd(f.costUsd)).join(' · ');
+    el.innerHTML =
+        '<div class="shead"><span class="stitle">Claude API spend (metered)</span>' +
+        '<select aria-label="Month" onchange="setCostMonth(this.value)">' + months.slice().reverse().map(m => '<option value="' + m + '"' + (m === sel ? ' selected' : '') + '>' + esc(monthName(m)) + (m === s.currentMonth ? ' (this month)' : '') + '</option>').join('') + '</select>' +
+        '<span class="shint" title="Token and web-search counts reported by the Claude API on each call, times the PRICE_* variables on the API service. Anthropic’s invoice is authoritative.">Metered per call · ' + esc(s.tz) + (s.ledgerStarted ? ' · per-call metering since ' + fmtDate(s.ledgerStarted) : '') + '</span></div>' +
+        '<div class="stiles">' +
+            tile('Today', usd(s.today.costUsd), calls(s.today) + unl(s.today)) +
+            tile(isCur ? 'This month to date' : esc(monthName(sel)), usd(s.selectedMonth.costUsd), calls(s.selectedMonth) + ' · ' + s.selectedMonth.issues + ' issue' + (s.selectedMonth.issues === 1 ? '' : 's') + unl(s.selectedMonth)) +
+            tile('All time to date', usd(s.allTime.costUsd), calls(s.allTime) + ' · ' + s.allTime.issues + ' issues' + (s.firstRecord ? ' · since ' + fmtDate(s.firstRecord) : '')) +
+            actual +
+        '</div>' +
+        '<div class="bars" aria-label="Metered spend by month">' + bars + '</div><div class="barlab">' + labs + '</div>' +
+        (feats ? '<div class="feat"><strong>' + esc(monthName(sel)) + ' by feature:</strong> ' + feats + '</div>' : '');
+}
+// One issue's cost to date, shown at the top of the case drawer.
+function issueCostHtml(id) {
+    const c = COST.perIssue[id];
+    if (!c) return '<div class="costbox" id="dCost"><span class="id">Loading Claude API cost…</span></div>';
+    if (!c.calls) return '<div class="costbox" id="dCost">Claude API cost to date for this issue: <span class="big">$0.00</span> <span class="id">(no metered calls yet)</span></div>';
+    return '<div class="costbox" id="dCost">Claude API cost to date for this issue: <span class="big">' + usd(c.costUsd) + '</span> <span style="color:var(--muted);">· ' + c.calls + ' call' + (c.calls === 1 ? '' : 's') + '</span>' +
+        '<table>' + c.byFeature.map(f => '<tr><td>' + esc(f.label) + '</td><td class="n">' + f.calls + ' call' + (f.calls === 1 ? '' : 's') + '</td><td class="n">' + usd(f.costUsd) + '</td><td class="n id">last ' + fmtDate(f.last) + '</td></tr>').join('') + '</table></div>';
+}
+COST.perIssueAt = {};
+function loadIssueCost(id) {
+    const now = Date.now();
+    if (COST.perIssue[id] && now - (COST.perIssueAt[id] || 0) < 15000) return;   // the drawer re-renders often while a run is live
+    COST.perIssueAt[id] = now;
+    fetch(API + '/api-costs/submission/' + encodeURIComponent(id)).then(r => r.ok ? r.json() : null).then(c => {
+        if (!c) { const el = document.getElementById('dCost'); if (el) el.remove(); return; }
+        COST.perIssue[id] = c;
+        const el = document.getElementById('dCost');
+        if (el && selected && selected.SubmissionId === id) el.outerHTML = issueCostHtml(id);
+    }).catch(() => {});
+}
+
+// Keep the spend figures current while the console is open (every 2 minutes, when the tab is visible).
+setInterval(() => { if (!document.hidden && API) loadCosts(); }, 120000);
+
 // ---------- load ----------
 function applyList(data) {
     ALL = data.submissions || [];
+    mergeCosts();
+    loadCosts();
     paintTabs();
     document.getElementById('conn').textContent = 'Connected · ' + ALL.length + ' case(s) · ' + new Date().toLocaleTimeString();
     setBanner('', '');
@@ -1126,7 +1245,7 @@ function iaCostHtml(cur, d) {
     let line = 'Metered cost of this run: <strong>$' + Number(cur.costUsd).toFixed(2) + '</strong> — ' +
         n(u.input_tokens) + ' input + ' + n(u.cache_creation_input_tokens) + ' cache-write + ' + n(u.cache_read_input_tokens) + ' cache-read tokens, ' +
         n(u.output_tokens) + ' output tokens, ' + n(u.web_search_requests) + ' web search(es), ' + n(u.api_calls) + ' API call(s).';
-    if (d.monthToDate) line += ' Month to date: <strong>$' + Number(d.monthToDate.costUsd).toFixed(2) + '</strong> over ' + d.monthToDate.runs + ' analyses.';
+    // v14.2: totals now live in the spend strip at the top and the issue's cost box.
     return '<div class="id" style="margin-bottom:8px; line-height:1.5;" title="Counts come from the Claude API response. Prices are the PRICE_* variables on the API service; the Anthropic Console invoice is authoritative.">' + line + '</div>';
 }
 
@@ -1240,6 +1359,7 @@ function renderDetail() {
             (r.DeletedReason ? ': ' + esc(r.DeletedReason) : '') + '). Nothing was erased. <button class="btn-light" style="padding:3px 10px; font-size:12px;" onclick="restoreCase(\'' + esc(r.SubmissionId) + '\')">Restore</button></div>';
     }
 
+    html += issueCostHtml(r.SubmissionId);
     html += appealBoxHtml();
     html += '<div id="iaWrap">' + renderIssueAnalysis() + '</div>';
 
@@ -1387,6 +1507,7 @@ function renderDetail() {
         : '<div class="empty">Nothing recorded yet. Changes you save here appear in this trail.</div>';
 
     document.getElementById('dBody').innerHTML = html;
+    loadIssueCost(r.SubmissionId);
     paintVbar();
 }
 
@@ -1937,7 +2058,7 @@ function exportCsv() {
     const cols = ['SubmissionId', 'CaseID', 'UtilityCaseID', 'CustomerName', 'AccountNumber', 'UtilityName',
                   'UtilityType', 'IssueType', 'AuditorName', 'FinancialImpactRefund', 'FinancialImpactFuture',
                   'LatestScore', 'FinalWithRedline', 'LikelihoodUtility', 'DecisionRule', 'RatingMethod', 'LatestRound', 'Status', 'Priority', 'AssignedTo', 'DueDate',
-                  'VersionCount', 'FileCount', 'CreatedAt', 'UpdatedAt', 'AdminNotes'];
+                  'VersionCount', 'FileCount', 'ApiCost', 'ApiCalls', 'CreatedAt', 'UpdatedAt', 'AdminNotes'];
     const csv = [cols.join(',')].concat(VIEW.map(r =>
         cols.map(c => '"' + String(r[c] === null || r[c] === undefined ? '' : r[c]).replace(/"/g, '""') + '"').join(','))).join('\r\n');
 
